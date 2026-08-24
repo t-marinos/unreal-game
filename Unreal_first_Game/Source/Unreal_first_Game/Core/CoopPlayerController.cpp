@@ -1,6 +1,7 @@
 #include "Core/CoopPlayerController.h"
 #include "Core/GameConstants.h"
 #include "Camera/CoopOrbitCamera.h"
+#include "Blueprint/UserWidget.h"
 
 ACoopPlayerController::ACoopPlayerController()
 {
@@ -30,5 +31,16 @@ void ACoopPlayerController::BeginPlay()
 	{
 		OrbitCamera->Initialize(this, GameConstants);
 		SetViewTarget(OrbitCamera);
+	}
+
+	// M6: one shared visible timer (CLAUDE.md §7). The widget itself only ever reads
+	// ACoopGameState::GetElapsedMatchTime() -- no gameplay state lives here, purely local display.
+	if (MatchTimerWidgetClass)
+	{
+		MatchTimerWidget = CreateWidget<UUserWidget>(this, MatchTimerWidgetClass);
+		if (MatchTimerWidget)
+		{
+			MatchTimerWidget->AddToViewport();
+		}
 	}
 }

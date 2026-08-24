@@ -6,6 +6,7 @@
 
 class UGameConstants;
 class ACoopOrbitCamera;
+class UUserWidget;
 
 // Will also hold the button/effect Server RPC (M7) and the DumpGameState exec command (M8) --
 // both live here because Server RPCs and Exec commands are PlayerController responsibilities in
@@ -33,4 +34,12 @@ private:
 	// (CLAUDE.md §5's local-only camera). Never replicated -- see ACoopOrbitCamera.
 	UPROPERTY()
 	TObjectPtr<ACoopOrbitCamera> OrbitCamera;
+
+	// M6: WBP_MatchTimer, content-wired on BP_PlayerController's CDO. Purely a local read of
+	// ACoopGameState::GetElapsedMatchTime() -- no gameplay data lives on the widget itself.
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UUserWidget> MatchTimerWidgetClass;
+
+	UPROPERTY()
+	TObjectPtr<UUserWidget> MatchTimerWidget;
 };

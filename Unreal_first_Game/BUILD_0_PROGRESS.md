@@ -61,10 +61,10 @@ Play-In-Editor clients on one machine. Packaging + the real multi-friend Tailsca
 - [x] Verify: per-client independence, camera never tracks a player's position
 
 ## M6 — Shared server-time timer
-- [ ] Replicated `MatchStartServerTime` on `CoopGameState`, set via server time only
-- [ ] UMG widget showing elapsed time since match start
-- [ ] Set `NetUpdateFrequency` on `CoopGameState` from `DA_GameConstants`
-- [ ] Verify: all 5 PIE clients show the same elapsed value
+- [x] Replicated `MatchStartServerTime` on `CoopGameState`, set via server time only
+- [x] UMG widget showing elapsed time since match start
+- [x] Set `NetUpdateFrequency` on `CoopGameState` from `DA_GameConstants`
+- [x] Verify: all 5 PIE clients show the same elapsed value
 
 ## M7 — Button/effect Server RPC
 - [ ] One interactable actor (new or adapted from `LevelPrototyping/Interactable/`)
@@ -560,3 +560,120 @@ Play-In-Editor clients on one machine. Packaging + the real multi-friend Tailsca
   local per machine — there is no code path by which one client's drag could reach another's camera.
   `StopPIE`, `save_assets([])`.
   **M5 is now fully closed.** Next: M6 (shared server-time timer).
+
+- **M6 — logic and Blueprint-graph work all done; PAUSED on one genuine tooling gap, resume here.**
+  New C++: `ACoopGameState` gained `MatchStartServerTime` (`UPROPERTY(Replicated)`, set once in
+  `BeginPlay` via `GetServerWorldTimeSeconds()`, gated on `HasAuthority()` — CLAUDE.md §4.5),
+  `GetElapsedMatchTime()` (`BlueprintPure`, `= GetServerWorldTimeSeconds() - MatchStartServerTime`,
+  clamped ≥0), `GetLifetimeReplicatedProps`/`DOREPLIFETIME`, and a `GameConstants` reference (same
+  pattern as GameMode/PlayerController) that also sets `NetUpdateFrequency` from
+  `GameConstants->GameStateNetUpdateFrequency` in the same `BeginPlay` (§4.4). `ACoopGameMode`'s
+  constructor no longer hardcodes `GameStateClass` either, for the same reason `DefaultPawnClass`/
+  `PlayerControllerClass` don't (needs a Blueprint wrapper to hold `GameConstants`). Added
+  `TSubclassOf<UUserWidget> MatchTimerWidgetClass` + `MatchTimerWidget` to `ACoopPlayerController`;
+  `BeginPlay` (inside the existing `IsLocalController()` branch, alongside the M5 camera) now also
+  `CreateWidget`s and `AddToViewport`s it. `Unreal_first_Game.Build.cs` gained a `"UMG"` public
+  dependency (needed for `UUserWidget`/`CreateWidget`) — **worth noting for future sessions: Live
+  Coding successfully picked up this new module dependency via a normal Ctrl+Alt+F11**, no full
+  `Build.bat`/project-file-regeneration needed, contrary to the concern raised before asking for the
+  compile.
+  **Content wiring:** created `/Game/Blueprints/BP_GameState` (parent `ACoopGameState`), set its
+  `GameConstants` CDO property, compiled; set `BP_GameMode`'s `GameStateClass` →
+  `BP_GameState_C` and `BP_PlayerController`'s `MatchTimerWidgetClass` → `WBP_MatchTimer_C`,
+  recompiled both `BP_GameMode` and `BP_PlayerController` (M4's gotcha #1, applied again), verified
+  every property survived via a fresh `get_properties` read.
+  **New tooling finding: `unreal-mcp` can create a real `WidgetBlueprint` asset**
+  (`BlueprintTools.create` with `asset_type` = `/Script/UMG.UserWidget` — confirmed via
+  `AssetTools.find_assets` filtering on `/Script/UMGEditor.WidgetBlueprint`, not just a generically
+  Blueprint-parented actor-style asset) **and can build full function-graph logic inside one via the
+  same `write_graph_dsl`/`add_function_graph`/`add_function_param` tools used for any other
+  Blueprint** — created `/Game/Blueprints/UI/WBP_MatchTimer` and, inside it, a
+  `GetElapsedMatchTimeText()` function (no params, returns `Text`) that calls `Game|GetGameState`,
+  casts to `CoopGameState` (`Utilities|Casting|CastToCoopGameState`), calls the new
+  `Match|GetElapsedMatchTime` node (found via `find_node_types` — confirms a C++
+  `UFUNCTION(BlueprintPure, Category="Match")` shows up node-searchable exactly by that category
+  name), rounds it (`Math|Float|Round`) and converts to text (`Utilities|Text|ToText(Integer)`),
+  with a `"0"` fallback on cast failure. Verified via `read_graph_dsl` (round-trips correctly) and
+  confirmed no compile errors in the log after `write_graph_dsl`.
+  **But: `unreal-mcp` has no tool to populate a widget's actual WidgetTree.**
+  `ActorTools.add_component` explicitly rejects non-`ActorComponent` types (tried
+  `/Script/UMG.TextBlock`, got `"...is not an ActorComponent"`) — `UWidget`s live in a completely
+  separate tree structure from actor components, and no toolset here (`BlueprintTools`, `ObjectTools`,
+  `ProgrammaticToolset` — the latter is sandboxed to `json`/`math`/`datetime`/`copy`/`re`/`time`,
+  can't `import unreal` or construct new widget-tree nodes) exposes a way to add a `UWidget` to a
+  `WidgetTree`, or to create the "Create Binding"/"Bind Function" association between a widget's
+  `Text` property and a graph function. This is a genuine, structural gap, not something to work
+  around with more reflection calls.
+  **What's left — needs ~30 seconds of manual Editor UI work, then a re-verify pass:**
+  1. Open `/Game/Blueprints/UI/WBP_MatchTimer` in the UMG Designer.
+  2. Drag a **Text Block** onto the canvas (anywhere — Build 0 doesn't need real layout polish).
+  3. Select it, in the Details panel find its **Text** property, click the bind icon (⚙/bind chain
+     icon next to the field) → **Bind Function** (not "Create Binding" — the function already
+     exists) → choose **GetElapsedMatchTimeText**.
+  4. Save (Ctrl+S in the widget editor, or `AssetTools.save_assets([])` again once the pending
+     changes are visible to the asset system).
+  5. **Then, resume verification from here:** start a fresh 5-client PIE session, confirm via
+     `EditorAppToolset.CaptureEditorImage` that the timer text is visible and increasing across
+     multiple captures a few seconds apart, on all 5 client windows (the actual "all 5 clients show
+     the same elapsed value" checklist item — not fully checkable through server-side reflection
+     alone, since `SceneTools.find_actors`/`ObjectTools` only ever reach the server's own world, as
+     established in M4/M5's logs; a visible, moving, matching number across all 5 captured windows
+     is the practical proxy this project's tooling can actually give us for "all clients agree").
+  6. `StopPIE`, `save_assets([])`, check off M6's remaining boxes, log completion.
+  Next after M6 completes: M7 (button/effect Server RPC).
+
+- **M6 done — two more real bugs found and fixed via the user's manual testing loop, both logged
+  here in full since they're easy to reintroduce.** The user did the Designer step (dragged a Text
+  Block, clicked "Create Binding" since my pre-built function didn't show as bindable at the time),
+  which produced an auto-generated `GetText` stub already correctly wired to the Text property.
+
+  **Root cause of "my function doesn't show in the Bind list", finally nailed down:** it is NOT
+  about Cast nodes or exec-pin topology (that theory was tested and falsified: the auto-generated,
+  definitely-working `GetText` stub shows the exact same `Exec`/`"then"` output pin on its
+  `K2Node_FunctionEntry` as my manually-created function did, via `get_node_infos`). The actual
+  cause: **a Blueprint-graph function's "Pure" flag is a Details-panel-only checkbox with no
+  property exposed through `unreal-mcp`'s reflection tools (`list_properties` on a K2Node returns
+  almost nothing) or through the graph DSL** (`get_graph_dsl_docs` has no purity syntax). There is
+  currently no way to create a *bindable* (pure) Blueprint-graph function through this tooling.
+  **Fix:** moved the logic into C++ instead, where purity is unambiguous. New
+  `Source/Unreal_first_Game/Core/CoopMatchTimerWidget.h/.cpp` (`UUserWidget` subclass) with
+  `UFUNCTION(BlueprintPure) FText GetElapsedMatchTimeText() const` — a genuine C++
+  `BlueprintPure` function always generates a pure Blueprint node, no graph-side flag needed.
+  Reparented `WBP_MatchTimer` to it (`set_parent`), removed the now-redundant
+  `GetElapsedMatchTimeText` Blueprint graph I'd built earlier (`remove_function_graph`, avoids a
+  name collision with the new C++ member of the same name), and rewrote `GetText`'s body via
+  `write_graph_dsl` to `(return (Match|GetElapsedMatchTimeText self))`.
+
+  **Second bug, found only because the user reported "shows Text Block" after reparenting:**
+  reparenting `WBP_MatchTimer`'s C++ base class **reset the Text property's live binding back to
+  its static placeholder default** — the `GetText` function itself survived untouched (confirmed via
+  `read_graph_dsl`), but the widget's per-instance binding association to it was cleared by the
+  reparent/reinstance. Fix was manual: user re-opened the Bind dropdown (now listing both `GetText`
+  *and* the new C++ `GetElapsedMatchTimeText`, confirming the C++ member function is correctly
+  inherited and bind-eligible), selected `GetElapsedMatchTimeText` directly, recompiled, saved.
+  **Practical rule for future sessions: reparenting a widget's C++ base after a property binding has
+  already been set will silently clear that binding — always re-check/re-bind afterward, the
+  Blueprint compiling cleanly is not evidence the binding survived.**
+
+  **Third bug, the interesting one — found only by reading the actual replicated value instead of
+  trusting a screenshot or the user's first glance:** after the above fixes, the widget correctly
+  showed "0" but never counted up. `MatchStartServerTime`'s `UPROPERTY(Replicated)` had no
+  Blueprint/Edit specifier, so — like M4's `PossessedBy` investigation — it wasn't reachable through
+  `ObjectTools.get_properties` at all; temporarily added `VisibleAnywhere` (not `BlueprintReadOnly` —
+  same private-member UHT rule from M3) specifically to make it inspectable, per CLAUDE.md §4.3
+  ("state must always be printable"), then read it directly: `matchStartServerTime = 0`, exactly,
+  even a fresh PIE session later, even though `netUpdateFrequency = 30` (read in the same
+  `get_properties` call) proved `BeginPlay`'s `HasAuthority()` branch had genuinely executed.
+  **Root cause:** `GetElapsedMatchTime()`'s "hasn't started yet" guard used `MatchStartServerTime <=
+  0.0f` as a sentinel, but `GetServerWorldTimeSeconds()` legitimately returns exactly `0.0` when
+  `BeginPlay` fires on the very first frame of world time (GameState is some of the earliest
+  server-spawned infrastructure) — so the "unset" guard was permanently true for the entire match,
+  even though the value had, in fact, been correctly and deliberately set. Classic "0 used as both a
+  valid value and a not-set sentinel" bug. **Fix:** changed the default/sentinel to `-1.0f` (never a
+  legitimate world time) and the guard to `< 0.0f`. Verified via the same reflection read
+  (`matchStartServerTime = 0`, now correctly treated as "set"), then the user directly confirmed on
+  screen: the number counts up. A final `CaptureEditorImage` (upscaled 3x for legibility — the raw
+  1280×397 capture is too small to read text at 1x) shows **"42"** clearly rendered top-left of the
+  host's own window, consistent with the real elapsed wall-clock time across this debugging session.
+  **`StopPIE`, `save_assets([])`.** **M6 is now fully closed.**
+  Next: M7 (button/effect Server RPC).

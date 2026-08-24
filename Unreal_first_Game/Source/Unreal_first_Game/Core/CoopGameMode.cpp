@@ -1,5 +1,4 @@
 #include "Core/CoopGameMode.h"
-#include "Core/CoopGameState.h"
 #include "Core/CoopPlayerState.h"
 #include "Core/GameConstants.h"
 #include "GameFramework/GameStateBase.h"
@@ -7,13 +6,13 @@
 ACoopGameMode::ACoopGameMode()
 {
 	// Wire the GameMode's own class defaults to the Coop skeletons now, ahead of any of
-	// them having real logic, so the pattern is established early. DefaultPawnClass and
-	// PlayerControllerClass are deliberately left untouched here -- both need a Blueprint
-	// wrapper (BP_PlayerCharacter since M4, BP_PlayerController since M5) so a UPROPERTY
-	// asset reference on them (mesh/animation, GameConstants) can be set via content
-	// wiring instead of hardcoded in C++. Until something points the project's
-	// GlobalDefaultGameMode at this class (M3), none of this is live in PIE.
-	GameStateClass = ACoopGameState::StaticClass();
+	// them having real logic, so the pattern is established early. DefaultPawnClass,
+	// PlayerControllerClass, and GameStateClass are deliberately left untouched here --
+	// all three need a Blueprint wrapper (BP_PlayerCharacter since M4, BP_PlayerController
+	// since M5, BP_GameState since M6) so a UPROPERTY asset reference on them (mesh/
+	// animation, GameConstants) can be set via content wiring instead of hardcoded in C++.
+	// Until something points the project's GlobalDefaultGameMode at this class (M3), none
+	// of this is live in PIE.
 	PlayerStateClass = ACoopPlayerState::StaticClass();
 }
 
