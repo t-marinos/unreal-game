@@ -38,8 +38,18 @@ float ACoopGameState::GetElapsedMatchTime() const
 	return FMath::Max(0.0f, GetServerWorldTimeSeconds() - MatchStartServerTime);
 }
 
+void ACoopGameState::ToggleButtonPressed()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	bButtonPressed = !bButtonPressed;
+}
+
 void ACoopGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(ACoopGameState, MatchStartServerTime);
+	DOREPLIFETIME(ACoopGameState, bButtonPressed);
 }

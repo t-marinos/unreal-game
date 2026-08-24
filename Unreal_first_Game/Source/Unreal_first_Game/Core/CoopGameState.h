@@ -21,6 +21,15 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Match")
 	float GetElapsedMatchTime() const;
 
+	// M7: one shared cosmetic effect, proving the Server RPC + replication plumbing (CLAUDE.md §7).
+	// Every client's cosmetic response (ACoopButton::Tick) reads this rather than reacting to the
+	// RPC or the overlap event directly, per CLAUDE.md §4.1.
+	UFUNCTION(BlueprintPure, Category = "Interaction")
+	bool IsButtonPressed() const { return bButtonPressed; }
+
+	// Server-only. Called by ACoopPlayerController::Server_PressButton's RPC handler.
+	void ToggleButtonPressed();
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -37,6 +46,11 @@ private:
 	// GetServerWorldTimeSeconds() can legitimately return if BeginPlay runs at world start.
 	UPROPERTY(Replicated, VisibleAnywhere, Category = "Match")
 	float MatchStartServerTime = -1.0f;
+
+	// M7: toggled server-side by ToggleButtonPressed(); replicates to every client, who each read
+	// it (via IsButtonPressed()) as the sole source of truth for the button's cosmetic state.
+	UPROPERTY(Replicated, VisibleAnywhere, Category = "Interaction")
+	bool bButtonPressed = false;
 
 	// Every tunable lives in DA_GameConstants per CLAUDE.md §10. This class has no Blueprint
 	// wrapper of its own to hold this reference the way BP_GameMode/BP_PlayerController do -- see

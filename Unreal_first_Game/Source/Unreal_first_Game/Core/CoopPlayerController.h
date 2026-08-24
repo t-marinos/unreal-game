@@ -8,9 +8,8 @@ class UGameConstants;
 class ACoopOrbitCamera;
 class UUserWidget;
 
-// Will also hold the button/effect Server RPC (M7) and the DumpGameState exec command (M8) --
-// both live here because Server RPCs and Exec commands are PlayerController responsibilities in
-// Unreal (each player has exactly one).
+// Will also hold the DumpGameState exec command (M8) -- both Server RPCs and Exec commands are
+// PlayerController responsibilities in Unreal (each player has exactly one).
 UCLASS()
 class UNREAL_FIRST_GAME_API ACoopPlayerController : public APlayerController
 {
@@ -18,6 +17,11 @@ class UNREAL_FIRST_GAME_API ACoopPlayerController : public APlayerController
 
 public:
 	ACoopPlayerController();
+
+	// M7: intent only, per CLAUDE.md §4.1 -- "I walked into the button," never a result like "the
+	// button is now lit." Called by ACoopButton when this controller's own pawn overlaps it.
+	UFUNCTION(Server, Reliable)
+	void Server_PressButton();
 
 protected:
 	virtual void BeginPlay() override;

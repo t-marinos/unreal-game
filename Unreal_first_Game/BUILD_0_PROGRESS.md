@@ -67,10 +67,10 @@ Play-In-Editor clients on one machine. Packaging + the real multi-friend Tailsca
 - [x] Verify: all 5 PIE clients show the same elapsed value
 
 ## M7 — Button/effect Server RPC
-- [ ] One interactable actor (new or adapted from `LevelPrototyping/Interactable/`)
-- [ ] `Server_PressButton()` RPC on `CoopPlayerController` (intent only)
-- [ ] Replicated effect on `CoopGameState`, cosmetic response reads from replication
-- [ ] Verify: all 5 PIE clients see the same effect at the same time
+- [x] One interactable actor (new or adapted from `LevelPrototyping/Interactable/`)
+- [x] `Server_PressButton()` RPC on `CoopPlayerController` (intent only)
+- [x] Replicated effect on `CoopGameState`, cosmetic response reads from replication
+- [x] Verify: all 5 PIE clients see the same effect at the same time
 
 ## M8 — `DumpGameState` exec command
 - [ ] `UFUNCTION(Exec) DumpGameState()` on `CoopPlayerController`
@@ -677,3 +677,42 @@ Play-In-Editor clients on one machine. Packaging + the real multi-friend Tailsca
   host's own window, consistent with the real elapsed wall-clock time across this debugging session.
   **`StopPIE`, `save_assets([])`.** **M6 is now fully closed.**
   Next: M7 (button/effect Server RPC).
+
+- **M7 done — first milestone this session with no compile-time surprises; verified end-to-end via
+  direct actor teleportation instead of manual playtesting, and confirmed visually.** New
+  `Source/Unreal_first_Game/Core/CoopButton.h/.cpp` (`AActor`, `bReplicates = false` -- it's a pure
+  cosmetic responder, no state of its own): a `UStaticMeshComponent` (hardcoded to
+  `/Engine/BasicShapes/Cube.Cube` via `ConstructorHelpers::FObjectFinder` -- a plain utility shape
+  needs no Blueprint wrapper, unlike the Character/GameMode/PlayerController/GameState classes that
+  needed one specifically to hold a `GameConstants`/mesh reference) plus a `UBoxComponent` trigger
+  (`OverlapAllDynamic` profile). `OnTriggerBeginOverlap` checks `Cast<ACoopCharacter>(OtherActor)` +
+  `IsLocallyControlled()` (overlap events also fire for simulated proxies on other clients' views of
+  the same pawn -- this gate ensures only the machine that actually owns the overlapping pawn sends
+  the RPC) and calls the new `ACoopPlayerController::Server_PressButton()` (`UFUNCTION(Server,
+  Reliable)`, intent only, no payload beyond "this player pressed a button" -- CLAUDE.md §4.1) whose
+  `_Implementation` calls a new `ACoopGameState::ToggleButtonPressed()` (server-only,
+  `HasAuthority()`-gated, flips a new `UPROPERTY(Replicated, VisibleAnywhere) bool bButtonPressed`,
+  replicated via `DOREPLIFETIME` alongside `MatchStartServerTime`). `ACoopButton::Tick` polls
+  `GameState->IsButtonPressed()` each frame (simple/"boring" per CLAUDE.md over a push-based
+  GameState-finds-the-button pattern -- fine for Build 0's one button) and only re-applies a
+  `CreateAndSetMaterialInstanceDynamic` colour change when the value actually changes.
+  **Content wiring:** created `/Game/Materials/M_CoopButton` via `MaterialTools` (a `Vector
+  Parameter` node named `"Color"`, wired straight to `MP_EmissiveColor`, `ShadingModel` set to
+  `MSM_Unlit` -- matches CLAUDE.md §5's "a coloured ring/flat unlit plane is a spell effect" bar
+  exactly, no lighting complexity needed) -- this is the first time this session touched
+  `MaterialTools` rather than just `MaterialInstanceTools`, confirming the full expression-graph
+  authoring path (`add_expression`, `connect_to_output`, `recompile`) works cleanly end-to-end.
+  Placed one `ACoopButton` instance directly in `Lvl_ThirdPerson` via
+  `SceneTools.add_to_scene_from_class` (`snap_to_ground: true`) -- no Blueprint wrapper needed for
+  the actor itself either, since it has no per-instance tunables.
+  **Verify, done without asking the user to manually walk a character into it:**
+  `ActorTools.set_actor_transform` teleported `BP_PlayerCharacter_C_0` (the host's own, confirmed
+  `IsLocallyControlled()`) directly into the trigger volume -- confirmed via `get_properties` that
+  `bButtonPressed` flipped `true`, and the button's own `MID_M_CoopButton_0`'s `"Color"` vector
+  parameter read back as `(0.1, 1, 0.1)` (green). Moved the character out and back in again --
+  confirmed the toggle correctly flipped back to `false`/grey, proving repeated presses work, not
+  just a one-shot latch. Final `CaptureEditorImage` (3x upscaled) with the character teleported back
+  in shows the button rendering **green in all 5 PIE windows simultaneously** -- the exact "all 5
+  PIE clients see the same effect at the same time, triggered by any one player" bar from the
+  checklist. `StopPIE`, `save_assets([])`. **M7 is now fully closed.**
+  Next: M8 (`DumpGameState` exec command).

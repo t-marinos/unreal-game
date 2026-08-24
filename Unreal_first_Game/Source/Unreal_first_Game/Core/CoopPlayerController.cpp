@@ -1,5 +1,6 @@
 #include "Core/CoopPlayerController.h"
 #include "Core/GameConstants.h"
+#include "Core/CoopGameState.h"
 #include "Camera/CoopOrbitCamera.h"
 #include "Blueprint/UserWidget.h"
 
@@ -10,6 +11,17 @@ ACoopPlayerController::ACoopPlayerController()
 	// BeginPlay's SetViewTarget(OrbitCamera) below the moment a pawn is possessed. We manage the
 	// view target ourselves per CLAUDE.md §5 -- the camera must never follow a player.
 	bAutoManageActiveCameraTarget = false;
+}
+
+void ACoopPlayerController::Server_PressButton_Implementation()
+{
+	// Server-only, per CLAUDE.md §4.1: this is where intent becomes a result. The RPC itself
+	// carries no payload beyond "this player pressed a button" -- ACoopGameState is the single
+	// source of truth every client's cosmetic response reads from afterward.
+	if (ACoopGameState* CoopGameState = GetWorld()->GetGameState<ACoopGameState>())
+	{
+		CoopGameState->ToggleButtonPressed();
+	}
 }
 
 void ACoopPlayerController::BeginPlay()
