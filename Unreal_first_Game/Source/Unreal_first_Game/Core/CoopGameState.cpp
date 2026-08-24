@@ -47,9 +47,41 @@ void ACoopGameState::ToggleButtonPressed()
 	bButtonPressed = !bButtonPressed;
 }
 
+void ACoopGameState::StartRoleSelectPhase(float DurationSeconds)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	CurrentPhase = EMatchPhase::RoleSelect;
+	RoleSelectEndServerTime = GetServerWorldTimeSeconds() + DurationSeconds;
+}
+
+void ACoopGameState::StartPrepPhase(float DurationSeconds)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	CurrentPhase = EMatchPhase::Prep;
+	PrepPhaseEndServerTime = GetServerWorldTimeSeconds() + DurationSeconds;
+}
+
+void ACoopGameState::StartHoldTheGatePhase()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	CurrentPhase = EMatchPhase::HoldTheGate;
+}
+
 void ACoopGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(ACoopGameState, MatchStartServerTime);
 	DOREPLIFETIME(ACoopGameState, bButtonPressed);
+	DOREPLIFETIME(ACoopGameState, CurrentPhase);
+	DOREPLIFETIME(ACoopGameState, RoleSelectEndServerTime);
+	DOREPLIFETIME(ACoopGameState, PrepPhaseEndServerTime);
 }

@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
+#include "Core/CoopRoleTypes.h"
 #include "CoopPlayerController.generated.h"
 
 class UGameConstants;
@@ -51,6 +52,13 @@ public:
 
 	UFUNCTION(Server, Reliable)
 	void Server_ToggleGodMode();
+
+	// Build 1, M3: intent only -- "I want to play Tank," never a result. Forwards to
+	// ACoopGameMode::TryClaimRole, which is the actual authoritative check (is this role still
+	// Unassigned across every PlayerState?) per CLAUDE.md §4.1. See DECISIONS.md's "Role assignment
+	// is player-chosen, not random" entry.
+	UFUNCTION(Server, Reliable)
+	void Server_ClaimRole(EPlayerRole DesiredRole);
 
 protected:
 	virtual void BeginPlay() override;

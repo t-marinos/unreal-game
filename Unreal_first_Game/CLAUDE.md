@@ -354,8 +354,11 @@ primary failure mode for this project. If you believe a refactor is needed, say 
 
 ### 6.1 Roles
 
-Five roles, assigned **randomly** at run start. Roles are temporary — they belong to the run, not
-to the player. Each role has **3–4 active abilities**, not a rotation.
+Five roles, **chosen by each player** during a RoleSelect phase at run start (first to claim a
+still-unclaimed role gets it, server-authoritative; a timeout auto-assigns any roles nobody picked
+in time). See `DECISIONS.md`'s "Role assignment is player-chosen, not random" entry for why this
+overrides this section's original "assigned randomly" language. Roles are temporary — they belong
+to the run, not to the player. Each role has **3–4 active abilities**, not a rotation.
 
 `TANK` · `SUPPORT` · `RUNNER` · `CONTROL` · `DAMAGE`
 
@@ -381,8 +384,9 @@ These are the spine of the game. Each is taught in one scene, then stressed by t
 
 ### 6.3 The 60-second preparation arena
 
-Five players spawn in a small locked circular arena. Roles assigned randomly. A visible 60-second
-countdown starts immediately — there is no relaxed loading period.
+Five players spawn in a small locked circular arena. Roles are chosen by each player (§6.1) during a
+RoleSelect phase that resolves before this arena's countdown starts. A visible 60-second countdown
+then starts immediately — there is no relaxed loading period.
 
 Each player sees:
 - 3–4 ability cards with icon, name, one-sentence explanation.

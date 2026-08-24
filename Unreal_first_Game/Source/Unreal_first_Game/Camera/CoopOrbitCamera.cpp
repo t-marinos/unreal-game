@@ -68,7 +68,10 @@ void ACoopOrbitCamera::Tick(float DeltaTime)
 	Controller->GetInputMouseDelta(MouseDeltaX, MouseDeltaY);
 
 	OrbitYaw += MouseDeltaX * OrbitYawSpeed;
-	OrbitPitch = FMath::Clamp(OrbitPitch - MouseDeltaY * OrbitPitchSpeed, MinPitch, MaxPitch);
+	// + not -: dragging the mouse up should pitch the camera up (toward MaxPitch, less steeply
+	// down), matching the non-inverted convention players expect. Was flipped -- caught by
+	// playtesting, not something the earlier reflection-only verification could have caught.
+	OrbitPitch = FMath::Clamp(OrbitPitch + MouseDeltaY * OrbitPitchSpeed, MinPitch, MaxPitch);
 
 	SpringArm->SetRelativeRotation(FRotator(OrbitPitch, OrbitYaw, 0.0f));
 }

@@ -2,6 +2,7 @@
 #include "Core/GameConstants.h"
 #include "Core/CoopGameState.h"
 #include "Core/CoopPlayerState.h"
+#include "Core/CoopGameMode.h"
 #include "Dev/DummyAIController.h"
 #include "Camera/CoopOrbitCamera.h"
 #include "Blueprint/UserWidget.h"
@@ -166,5 +167,15 @@ void ACoopPlayerController::Server_ToggleGodMode_Implementation()
 	{
 		CoopPS->SetInvulnerable(!CoopPS->IsInvulnerable());
 		UE_LOG(LogTemp, Log, TEXT("ToggleGodMode: %s is now %s."), *CoopPS->GetPlayerName(), CoopPS->IsInvulnerable() ? TEXT("invulnerable") : TEXT("vulnerable"));
+	}
+}
+
+void ACoopPlayerController::Server_ClaimRole_Implementation(EPlayerRole DesiredRole)
+{
+	ACoopPlayerState* CoopPS = GetPlayerState<ACoopPlayerState>();
+	ACoopGameMode* CoopGameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ACoopGameMode>() : nullptr;
+	if (CoopPS && CoopGameMode)
+	{
+		CoopGameMode->TryClaimRole(CoopPS, DesiredRole);
 	}
 }

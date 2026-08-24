@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameStateBase.h"
+#include "Core/CoopMatchPhase.h"
 #include "CoopGameState.generated.h"
 
 class UGameConstants;
@@ -30,6 +31,27 @@ public:
 	// Server-only. Called by ACoopPlayerController::Server_PressButton's RPC handler.
 	void ToggleButtonPressed();
 
+	// Build 1, M4: top-level match phase state machine. Every transition is written here by
+	// ACoopGameMode only -- see CoopMatchPhase.h. Never inferred or predicted client-side.
+	UFUNCTION(BlueprintPure, Category = "Match")
+	EMatchPhase GetCurrentPhase() const { return CurrentPhase; }
+
+	// Absolute server-world-time deadline for the RoleSelect phase, or -1 if it hasn't started yet
+	// (same "-1, not 0" sentinel reasoning as MatchStartServerTime below). UI countdowns should
+	// compute EndTime - GetServerWorldTimeSeconds() every frame, never run their own timer
+	// (CLAUDE.md §4.5).
+	UFUNCTION(BlueprintPure, Category = "Match")
+	float GetRoleSelectEndServerTime() const { return RoleSelectEndServerTime; }
+
+	UFUNCTION(BlueprintPure, Category = "Match")
+	float GetPrepPhaseEndServerTime() const { return PrepPhaseEndServerTime; }
+
+	// Server-only. Called by ACoopGameMode at each phase transition point (OnRosterComplete,
+	// ResolveRoleSelection, the prep timer's expiry).
+	void StartRoleSelectPhase(float DurationSeconds);
+	void StartPrepPhase(float DurationSeconds);
+	void StartHoldTheGatePhase();
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -51,6 +73,19 @@ private:
 	// it (via IsButtonPressed()) as the sole source of truth for the button's cosmetic state.
 	UPROPERTY(Replicated, VisibleAnywhere, Category = "Interaction")
 	bool bButtonPressed = false;
+
+	// Build 1, M4: see CoopMatchPhase.h. Defaults WaitingForRoster -- ACoopGameMode::OnRosterComplete
+	// is what first moves this forward.
+	UPROPERTY(Replicated, VisibleAnywhere, Category = "Match")
+	EMatchPhase CurrentPhase = EMatchPhase::WaitingForRoster;
+
+	// -1 (never a legitimate world time) means "phase hasn't started yet" -- same sentinel
+	// reasoning as MatchStartServerTime above.
+	UPROPERTY(Replicated, VisibleAnywhere, Category = "Match")
+	float RoleSelectEndServerTime = -1.0f;
+
+	UPROPERTY(Replicated, VisibleAnywhere, Category = "Match")
+	float PrepPhaseEndServerTime = -1.0f;
 
 	// Every tunable lives in DA_GameConstants per CLAUDE.md §10. This class has no Blueprint
 	// wrapper of its own to hold this reference the way BP_GameMode/BP_PlayerController do -- see

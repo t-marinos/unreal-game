@@ -58,4 +58,18 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Camera")
 	float CameraOrbitPitchSpeed = 0.5f;
+
+	// Build 1, M3: grace period for the RoleSelect phase (CLAUDE.md §6.1/§6.3, DECISIONS.md's "Role
+	// assignment is player-chosen, not random"). Once every real player has claimed a role, or this
+	// timer expires, ACoopGameMode::ResolveRoleSelection() auto-assigns any still-Unassigned
+	// PlayerState (a real AFK player, or a dev-mode dummy, which never claims) a random remaining
+	// role -- this prevents one player stalling the whole lobby indefinitely.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Roles")
+	float RoleSelectDurationSeconds = 30.0f;
+
+	// Build 1, M4: the 60-second preparation arena (CLAUDE.md §6.3). Starts once RoleSelect
+	// resolves, not when the roster completes -- players need to see their ability cards/synergy
+	// hints for the full 60s, not have it eaten by however long role selection took.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Match")
+	float PrepArenaDurationSeconds = 60.0f;
 };

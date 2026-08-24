@@ -87,9 +87,9 @@ Play-In-Editor clients on one machine. Packaging + the real multi-friend Tailsca
 - [x] Verify: solo PIE (1 real client + 4 dummies), possess a dummy, stub commands run without error
 
 ## M10 — Full regression pass + network emulation
-- [ ] Full 5-client PIE session exercising M2–M9 together
-- [ ] Apply `Net.PktLag` / `Net.PktLagVariance` / `Net.PktLoss`, re-verify checklist still converges
-- [ ] This is the "Build 0 core plumbing done" gate
+- [x] Full 5-client PIE session exercising M2–M9 together
+- [x] Apply `Net.PktLag` / `Net.PktLagVariance` / `Net.PktLoss`, re-verify checklist still converges
+- [x] This is the "Build 0 core plumbing done" gate
 
 ---
 
@@ -820,3 +820,107 @@ M10 is the full 5-client regression pass + network emulation gate.
 
 **Build 0's core plumbing (M0-M9) is done.** Only M10 remains: the full 5-client regression pass +
 network emulation gate.
+
+- **M10 done — found and fixed the single most important bug of Build 0: the 5-player cap never
+  actually worked.** No new code was planned for this milestone (per the plan: "verification only"),
+  but the very first check (never actually exercised before, since M3/M9 both deferred it and PIE
+  never previously ran more than 5 clients at once) broke immediately.
+  **Bug found:** set `LevelEditorPlaySettings.playNumberOfClients=6` (schema allows up to 10),
+  started PIE with `bDevMode=false` -- **all 6 got in.** `GameState->PlayerArray` had 6 entries, no
+  rejection anywhere in the log. Root cause: `ACoopGameMode::PreLogin` (since M2) checked
+  `GameState->PlayerArray.Num() >= MaxPlayers`, but `PlayerArray` only grows later, in
+  `PostLogin`/`InitNewPlayer` -- when multiple connections arrive in the same frame (every PIE
+  session does this, and real friends connecting around the same moment could too), every one of
+  their `PreLogin` calls sees the same stale, too-low count before any of them has actually been
+  added, so all pass the cap check simultaneously. A textbook time-of-check-to-time-of-use race,
+  invisible at 5-or-fewer clients (which is all any milestone through M9 ever tested) and only
+  caught because M10 finally tried 6.
+  **First fix attempt (counter incremented inside `PreLogin`, decremented in a new `Logout`
+  override) was correct in shape but still let 6 in on retest.** Added a temporary diagnostic
+  `UE_LOG` printing every `PreLogin` call; it fired exactly 5 times, never for the host. Confirmed:
+  **a Listen Server's own local host player never calls `PreLogin` at all** -- only the 5
+  "remote-style" PIE connections do, so a counter starting at 0 correctly capped those 5 remotes at
+  5 while the uncounted host made 6 total. Fixed by starting `AcceptedPlayerCount` at `1`, not `0`
+  (CLAUDE.md §3: this project is Listen-Server-only, never a dedicated server, so there is always
+  exactly one host-player present from world start) -- removed the diagnostic log afterward.
+  **A compile-confirmation false positive also cost real time here**: the user twice reported the
+  fix as compiled, but the log showed no new Live Coding entry either time (the old code was still
+  provably running -- the diagnostic log's own output proved it). Third attempt (explicitly
+  re-focusing the Editor window before Ctrl+Alt+F11) actually landed. **Practical rule: when a
+  fix's behavior doesn't change after a reported successful compile, check `Saved/Logs/*.log` for a
+  new `Starting Live Coding compile` entry before re-diagnosing the code itself** -- the code may
+  never have been rebuilt at all.
+  **Verified after the real fix:** 6-client PIE now correctly seats exactly 5
+  (`GameState->PlayerArray.Num()==5`) and logs `PreLogin failure: Session is full (5/5 players).`
+  for the 6th, which the engine then closes with `NMT_Failure`.
+  **Rest of the regression pass, standard 5-client PIE (`bDevMode=false`):** confirmed 5
+  `ACoopCharacter`s; `GameState.netUpdateFrequency==30` and `bButtonPressed` starts `false` (M6);
+  teleported the host into `ACoopButton`'s trigger volume -- `bButtonPressed` flipped `true` via the
+  same RPC path proven in M7; spot-checked two characters' `"Paint Tint"` values (`_0`=Red,
+  `_4`=Purple) against M4's known mapping, both correct.
+  **Network emulation:** used `LevelEditorPlaySettings.networkEmulationSettings`
+  (`bIsNetworkEmulationEnabled=true`, `emulationTarget="Any"`, 100-300ms latency + 5% packet loss on
+  both in/out) rather than live `Net.PktLag`/`Net.PktLoss` console commands, since it's settable
+  through the same `ObjectTools` reflection path already used all session and persists across the
+  PIE restart it requires (matches the plan's "or an Editor Preferences → Network Emulation
+  profile" alternative exactly). Fresh 5-client PIE under emulation: all 5 still connected
+  successfully despite the induced loss; teleported the host into the button again --
+  `bButtonPressed` still flipped correctly on the server, and a `CaptureEditorImage` (3x upscaled)
+  taken a few seconds later shows **the button rendering green in all 5 windows**, confirming the
+  replicated colour change reached every remote client despite the artificial delay -- "still
+  converges, just delayed," exactly as the plan describes. Disabled emulation afterward.
+  **Cleanup:** `playNumberOfClients` back to 5, `networkEmulationSettings.bIsNetworkEmulationEnabled`
+  back to `false`, `bDevMode` confirmed still `false`, all four `BP_GameMode` class-reference
+  properties re-verified intact. `StopPIE`, `save_assets([])`.
+
+**Build 0's core plumbing (M0-M10) is done.** Every milestone's own verify step has passed, plus the
+combined 5-client regression and network-emulation gate. The one real correctness bug this final
+pass caught (the player cap) is fixed and independently confirmed. Packaging a Development build
+and the real multi-friend Tailscale join test are the deferred follow-up plan noted at the top of
+this file, not part of this pass.
+
+## Post-M10 fixes (found via the user's own playtesting, not the automated regression pass)
+
+- **Orbit camera pitch was inverted.** `ACoopOrbitCamera::Tick` computed
+  `OrbitPitch = Clamp(OrbitPitch - MouseDeltaY * OrbitPitchSpeed, ...)` -- dragging the mouse up
+  made the camera pitch *down* (steeper toward the ground) instead of up. Every automated
+  verification this whole build used reflection (reading replicated/default property values), which
+  can prove a camera exists, is positioned correctly, and isn't attached to a player -- it can't
+  catch "the control feels backwards," since that only shows up from an actual mouse drag. Fixed by
+  flipping the sign to `OrbitPitch + MouseDeltaY * OrbitPitchSpeed`; user confirmed correct in PIE
+  after recompiling. **Worth remembering for future input-facing work:** control *feel* (inverted
+  axes, sensitivity, dead zones) needs a human playtest pass -- it's not something the
+  reflection-based verification this project relies on can ever substitute for.
+
+- **Player movement/look never worked at all, since M5.** User reported "why can't I move?" --
+  a much larger gap than it first sounded, since no session this whole build ever actually pressed
+  WASD (every verification used `ActorTools.set_actor_transform` to teleport characters instead,
+  since that's reflection-drivable and mouse/keyboard input isn't). Investigated via
+  `BlueprintTools.read_graph_dsl`: `BP_PlayerCharacter`'s `IA_Move`/`IA_Look`/`IA_MouseLook`/`IA_Jump`
+  Enhanced Input events all show empty bodies -- but so does the *original*, never-touched
+  `BP_ThirdPersonCharacter`, ruling out "the M4 duplicate lost its bindings" (these events likely
+  have real pin connections the DSL serializer just doesn't walk for this specific node type -- not
+  a bug, a tooling display limit noted for future reference). Checked the actual root cause instead:
+  the *original* template's GameMode used a dedicated `BP_ThirdPersonPlayerController`, whose
+  `EventBeginPlay` is where `IMC_Default`/`IMC_MouseLook` (the Enhanced Input Mapping Contexts that
+  make WASD/mouse fire any action at all) get added to the local player's Enhanced Input subsystem.
+  **M5 created `BP_PlayerController` from scratch** (`BlueprintTools.create`, empty EventGraph, no
+  template logic carried over) **and never replicated this** -- so no Input Mapping Context was ever
+  active for any player, meaning every Enhanced Input Action (`Move`, `Look`, `Jump`, `MouseLook`)
+  has been silently unbound since M5, not just recently broken.
+  **Fix:** added the same logic to `BP_PlayerController`'s `EventBeginPlay` via `write_graph_dsl`
+  (`DelayUntilNextTick` → `IsLocalPlayerController` check → `AddMappingContext` for both
+  `IMC_Default` and `IMC_MouseLook`) -- simplified from the original by dropping its touch-controls
+  branch entirely, since mobile/touch is explicitly out of scope (CLAUDE.md §8). Pure Blueprint-graph
+  content, no C++ involved -- `save_assets` alone was enough, no compile step needed. User confirmed
+  WASD movement works in PIE afterward.
+  **Why this went undetected through M4-M10:** every milestone's verify step used either reflection
+  (property reads) or direct actor teleportation, both of which bypass the Enhanced Input pipeline
+  entirely. Nothing in this project's testing approach so far actually exercised "does a keypress
+  produce movement" until a human tried it. **Practical rule for future sessions: when creating a
+  Blueprint wrapper for a class the ThirdPerson template already had a working equivalent for (a
+  PlayerController, a Character, a GameMode), check whether the *original* template Blueprint had
+  EventGraph logic worth carrying over before treating an empty new Blueprint as sufficient** -- a
+  class-defaults-only wrapper (like `BP_GameMode`/`BP_GameState`, which only needed a `GameConstants`
+  reference) is very different from one that also needs behavior (like a PlayerController that must
+  activate input).
