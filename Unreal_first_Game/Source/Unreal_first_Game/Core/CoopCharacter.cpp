@@ -10,7 +10,7 @@ void ACoopCharacter::BeginPlay()
 	// Covers the server (PlayerState is already valid by the time BeginPlay runs, since
 	// possession happens first) and the locally controlled client's first frame. Remote
 	// clients pick up PlayerState later, via OnRep_PlayerState below.
-	if (PlayerState)
+	if (GetPlayerState())
 	{
 		ApplyPlayerColorTint();
 	}
@@ -41,12 +41,12 @@ FLinearColor ACoopCharacter::GetColorForPlayerId(int32 PlayerId)
 
 void ACoopCharacter::ApplyPlayerColorTint()
 {
-	if (!PlayerState || !GetMesh())
+	if (!GetPlayerState() || !GetMesh())
 	{
 		return;
 	}
 
-	const FLinearColor Color = GetColorForPlayerId(PlayerState->GetPlayerId());
+	const FLinearColor Color = GetColorForPlayerId(GetPlayerState()->GetPlayerId());
 
 	// Both of the Mannequin's material slots (body + extras) expose a "Paint Tint" vector
 	// parameter -- apply to every slot so the whole character tints consistently.
