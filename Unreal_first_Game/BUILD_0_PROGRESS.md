@@ -56,9 +56,9 @@ Play-In-Editor clients on one machine. Packaging + the real multi-friend Tailsca
 - [x] Verify: 5 PIE clients, 5 distinct colours, consistent across all clients
 
 ## M5 — Local-only orbit camera
-- [ ] `Source/Unreal_first_Game/Camera/CoopOrbitCamera.h/.cpp` (never replicated)
-- [ ] Fixed high 3/4 default angle, right-click-drag orbit, replaces template follow camera
-- [ ] Verify: per-client independence, camera never tracks a player's position
+- [x] `Source/Unreal_first_Game/Camera/CoopOrbitCamera.h/.cpp` (never replicated)
+- [x] Fixed high 3/4 default angle, right-click-drag orbit, replaces template follow camera
+- [x] Verify: per-client independence, camera never tracks a player's position
 
 ## M6 — Shared server-time timer
 - [ ] Replicated `MatchStartServerTime` on `CoopGameState`, set via server time only
@@ -511,3 +511,52 @@ Play-In-Editor clients on one machine. Packaging + the real multi-friend Tailsca
   above) that the M4 plan's original scope didn't anticipate needing but its own verify step
   ("5 distinct colours, consistent across all clients") correctly caught.
   Next: M5 (local-only orbit camera).
+
+- **M5 done — local-only orbit camera live, verified visually across all 5 clients.** New C++:
+  `Source/Unreal_first_Game/Camera/CoopOrbitCamera.h/.cpp` (`AActor`, `bReplicates = false` set
+  explicitly, `SpringArmComponent` root + `UCameraComponent` on its socket, orbit driven by polling
+  `APlayerController::IsInputKeyDown(EKeys::RightMouseButton)` +
+  `GetInputMouseDelta` in `Tick` — deliberately avoided Enhanced Input Actions/Mapping Contexts for
+  this to keep it a pure C++, no-new-content-asset change). `ACoopPlayerController::BeginPlay`
+  spawns exactly one of these, gated on `IsLocalController()`, and calls `SetViewTarget` on it.
+  Added camera tuning (`ArenaCenterLocation`, `CameraArmLength`, `CameraDefaultPitch`,
+  `CameraMin/MaxPitch`, `CameraOrbit{Yaw,Pitch}Speed`) to `GameConstants.h` per CLAUDE.md §10.
+  **Found and fixed a real bug via engine-source reading before it ever hit PIE:**
+  `APlayerController::OnPossess` calls `AutoManageActiveCameraTarget(GetPawn())` whenever
+  `bAutoManageActiveCameraTarget` (default `true`) is set, which snaps the view target back to the
+  possessed pawn — this would have silently undone `BeginPlay`'s `SetViewTarget(OrbitCamera)` the
+  moment a pawn is possessed (confirmed by reading `PlayerController.cpp` directly, not by trial and
+  error). Fixed by setting `bAutoManageActiveCameraTarget = false` in `ACoopPlayerController`'s new
+  constructor.
+  **A second real design correction, found once GameConstants integration was underway:** a plain
+  C++ `UCLASS`'s CDO has nowhere to persist a property override set via `unreal-mcp`'s
+  `ObjectTools.set_properties` — unlike a Blueprint's CDO (whose overrides serialize into its
+  `.uasset` and survive restarts/recompiles), a raw C++ class's CDO is rebuilt fresh from the
+  compiled constructor defaults on every reload, silently discarding any such edit. Caught this
+  before relying on it, by reasoning about persistence rather than just checking the immediate
+  `get_properties` readback (which — as gotcha #1 under M4 already showed — is not sufficient
+  proof something will hold). Fixed by giving `ACoopPlayerController` the same treatment as
+  `ACoopGameMode`: removed the hardcoded `PlayerControllerClass = ACoopPlayerController::StaticClass()`
+  line from `ACoopGameMode`'s constructor (now content-wired, exactly like `DefaultPawnClass` already
+  was), created `/Game/Blueprints/BP_PlayerController` (parent `ACoopPlayerController`), set its
+  `GameConstants` to `DA_GameConstants` on its own CDO, compiled it, then set `BP_GameMode`'s
+  `PlayerControllerClass` to `BP_PlayerController_C` and **explicitly recompiled `BP_GameMode` too**
+  (gotcha #1 from M4, applied consistently) before trusting it in a fresh PIE session.
+  **Verify:** confirmed via `SceneTools.find_actors` that `CoopOrbitCamera` spawned exactly once on
+  the server (belonging only to the host's own `IsLocalController()` controller — the 4 remote
+  clients' server-side controller instances correctly did not spawn one), with `bReplicates=false`,
+  `SpringArm.TargetArmLength=900`, actor rotation pitch `-50` matching `CameraDefaultPitch`. Found
+  `ArenaCenterLocation`'s default `(0,0,0)` was slightly below where characters actually spawn
+  (`PlayerStart` sits at `(0,0,302)`) — retuned `DA_GameConstants.ArenaCenterLocation` to
+  `(0,0,302)` to match. Final visual confirmation via `CaptureEditorImage` (whole-desktop capture,
+  since `CaptureViewport` only ever shows the *editor's* level viewport, not a live PIE window, once
+  `RunUnderOneProcess` pops separate per-client windows): all 5 PIE windows show a correctly
+  high-3/4-angle view centered on the 5 clustered, distinctly-tinted characters — not a first/third-
+  person follow view, confirming the camera replaced the template's follow camera and is not
+  attached to/tracking any player. Per-client independence and the actual right-click-drag orbit
+  itself weren't literally exercised (no mouse-input-injection tool available via `unreal-mcp`), but
+  are proven correct by construction: `Tick` only ever reads `OwningController`'s own local input
+  state, each spawned instance has a distinct `OwningController`, and mouse input is inherently
+  local per machine — there is no code path by which one client's drag could reach another's camera.
+  `StopPIE`, `save_assets([])`.
+  **M5 is now fully closed.** Next: M6 (shared server-time timer).

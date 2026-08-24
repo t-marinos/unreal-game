@@ -1,21 +1,20 @@
 #include "Core/CoopGameMode.h"
 #include "Core/CoopGameState.h"
 #include "Core/CoopPlayerState.h"
-#include "Core/CoopPlayerController.h"
 #include "Core/GameConstants.h"
 #include "GameFramework/GameStateBase.h"
 
 ACoopGameMode::ACoopGameMode()
 {
 	// Wire the GameMode's own class defaults to the Coop skeletons now, ahead of any of
-	// them having real logic, so the pattern is established early. DefaultPawnClass is
-	// deliberately left untouched here -- that's M4's job, once BP_PlayerCharacter (a
-	// Mannequin-based reparent of ACoopCharacter) actually exists. Until then, and until
-	// something points the project's GlobalDefaultGameMode at this class (M3), none of
-	// this is live in PIE, which is why M2 introduces no visual/gameplay change.
+	// them having real logic, so the pattern is established early. DefaultPawnClass and
+	// PlayerControllerClass are deliberately left untouched here -- both need a Blueprint
+	// wrapper (BP_PlayerCharacter since M4, BP_PlayerController since M5) so a UPROPERTY
+	// asset reference on them (mesh/animation, GameConstants) can be set via content
+	// wiring instead of hardcoded in C++. Until something points the project's
+	// GlobalDefaultGameMode at this class (M3), none of this is live in PIE.
 	GameStateClass = ACoopGameState::StaticClass();
 	PlayerStateClass = ACoopPlayerState::StaticClass();
-	PlayerControllerClass = ACoopPlayerController::StaticClass();
 }
 
 void ACoopGameMode::PreLogin(const FString& Options, const FString& Address, const FUniqueNetIdRepl& UniqueId, FString& ErrorMessage)

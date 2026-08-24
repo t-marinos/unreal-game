@@ -30,4 +30,32 @@ public:
 	// once (set a single time in BeginPlay) and every client derives elapsed time locally from it.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI")
 	float MatchTimerDisplayUpdateIntervalSeconds = 0.1f;
+
+	// M5: local-only orbit camera (CLAUDE.md §5). World-space point every player's camera orbits
+	// around by default -- Build 0 has no real arena yet, so this defaults to the origin; each
+	// future scene can tune it once an actual arena exists.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Camera")
+	FVector ArenaCenterLocation = FVector::ZeroVector;
+
+	// M5: distance from the pivot to the camera.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Camera")
+	float CameraArmLength = 900.0f;
+
+	// M5: starting pitch (degrees) -- negative tips the camera down for the "high 3/4 angle" look
+	// per §5. Also the value orbiting can never exceed on either side, see Min/MaxPitch below.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Camera")
+	float CameraDefaultPitch = -50.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Camera")
+	float CameraMinPitch = -80.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Camera")
+	float CameraMaxPitch = -20.0f;
+
+	// M5: degrees of orbit per unit of raw mouse delta while right-click-dragging.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Camera")
+	float CameraOrbitYawSpeed = 0.5f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Camera")
+	float CameraOrbitPitchSpeed = 0.5f;
 };
