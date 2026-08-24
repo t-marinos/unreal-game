@@ -1,10 +1,13 @@
 #include "Core/CoopPlayerController.h"
 #include "Core/GameConstants.h"
 #include "Core/CoopGameState.h"
+#include "Core/CoopPlayerState.h"
+#include "Dev/DummyAIController.h"
 #include "Camera/CoopOrbitCamera.h"
 #include "Blueprint/UserWidget.h"
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/Pawn.h"
+#include "EngineUtils.h"
 
 ACoopPlayerController::ACoopPlayerController()
 {
@@ -105,4 +108,63 @@ void ACoopPlayerController::DumpGameState()
 	Dump += TEXT("  ]\n}");
 
 	UE_LOG(LogTemp, Log, TEXT("DumpGameState:\n%s"), *Dump);
+}
+
+void ACoopPlayerController::PossessDummy(int32 Index)
+{
+	Server_PossessDummy(Index);
+}
+
+void ACoopPlayerController::Server_PossessDummy_Implementation(int32 Index)
+{
+	TArray<ADummyAIController*> Dummies;
+	for (TActorIterator<ADummyAIController> It(GetWorld()); It; ++It)
+	{
+		Dummies.Add(*It);
+	}
+
+	if (!Dummies.IsValidIndex(Index))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("PossessDummy: index %d out of range (found %d dummies)."), Index, Dummies.Num());
+		return;
+	}
+
+	APawn* DummyPawn = Dummies[Index]->GetPawn();
+	if (!DummyPawn)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("PossessDummy: dummy %d has no pawn."), Index);
+		return;
+	}
+
+	// Swap: this controller takes the dummy's pawn, and the dummy controller takes back this
+	// controller's old pawn (so it isn't left standing uncontrolled) -- CLAUDE.md §7's
+	// "Possess/UnPossess swap (built-in Unreal API, no custom prediction needed)".
+	APawn* PreviousPawn = GetPawn();
+	Possess(DummyPawn);
+	if (PreviousPawn)
+	{
+		Dummies[Index]->Possess(PreviousPawn);
+		Dummies[Index]->SetBehavior(EDummyBehavior::Idle);
+	}
+}
+
+void ACoopPlayerController::SceneSkip()
+{
+	// Stub -- CLAUDE.md §7: Build 0 has no scenes yet. Real and working, wired up now so Build 1
+	// only needs to give it content, not build the command itself.
+	UE_LOG(LogTemp, Log, TEXT("SceneSkip: stub, no scenes exist yet (Build 1 will wire this up)."));
+}
+
+void ACoopPlayerController::ToggleGodMode()
+{
+	Server_ToggleGodMode();
+}
+
+void ACoopPlayerController::Server_ToggleGodMode_Implementation()
+{
+	if (ACoopPlayerState* CoopPS = GetPlayerState<ACoopPlayerState>())
+	{
+		CoopPS->SetInvulnerable(!CoopPS->IsInvulnerable());
+		UE_LOG(LogTemp, Log, TEXT("ToggleGodMode: %s is now %s."), *CoopPS->GetPlayerName(), CoopPS->IsInvulnerable() ? TEXT("invulnerable") : TEXT("vulnerable"));
+	}
 }

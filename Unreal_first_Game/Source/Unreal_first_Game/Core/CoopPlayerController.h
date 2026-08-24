@@ -30,6 +30,28 @@ public:
 	UFUNCTION(Exec)
 	void DumpGameState();
 
+	// M9: dev-mode console commands (CLAUDE.md §7). Each is a real, Exec-callable command that
+	// routes through a Server RPC (Possess/invuln-toggling must happen with authority, and Exec
+	// commands run locally on whichever machine typed them, which may be a client) -- the RPC call
+	// costs nothing extra when typed on the server itself (HasAuthority() is already true, so
+	// Unreal calls the _Implementation directly, no network round trip).
+	UFUNCTION(Exec)
+	void PossessDummy(int32 Index);
+
+	UFUNCTION(Server, Reliable)
+	void Server_PossessDummy(int32 Index);
+
+	// Stub: Build 0 has no scenes yet, so this is a real, working command with nowhere meaningful
+	// to jump to (CLAUDE.md §7). Build 1 gives it content once scenes exist.
+	UFUNCTION(Exec)
+	void SceneSkip();
+
+	UFUNCTION(Exec)
+	void ToggleGodMode();
+
+	UFUNCTION(Server, Reliable)
+	void Server_ToggleGodMode();
+
 protected:
 	virtual void BeginPlay() override;
 

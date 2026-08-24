@@ -78,13 +78,13 @@ Play-In-Editor clients on one machine. Packaging + the real multi-friend Tailsca
 - [x] Verify: run on server and on a client, shared fields match
 
 ## M9 — Dev mode
-- [ ] `Source/Unreal_first_Game/Dev/DummyAIController.h/.cpp` (Idle / FollowPlayer / StandOn(TargetActor))
-- [ ] `bDevMode` flag on `CoopGameMode`, auto-fills empty slots with dummies up to 5
-- [ ] Allow starting the run without waiting for 5 real connections
-- [ ] `PossessDummy <Index>` exec command
-- [ ] `SceneSkip` exec command (stub — no scenes exist yet)
-- [ ] God mode / invuln replicated bool on `CoopPlayerState` (stub — no damage system yet)
-- [ ] Verify: solo PIE (1 real client + 4 dummies), possess a dummy, stub commands run without error
+- [x] `Source/Unreal_first_Game/Dev/DummyAIController.h/.cpp` (Idle / FollowPlayer / StandOn(TargetActor))
+- [x] `bDevMode` flag on `CoopGameMode`, auto-fills empty slots with dummies up to 5
+- [x] Allow starting the run without waiting for 5 real connections
+- [x] `PossessDummy <Index>` exec command
+- [x] `SceneSkip` exec command (stub — no scenes exist yet)
+- [x] God mode / invuln replicated bool on `CoopPlayerState` (stub — no damage system yet)
+- [x] Verify: solo PIE (1 real client + 4 dummies), possess a dummy, stub commands run without error
 
 ## M10 — Full regression pass + network emulation
 - [ ] Full 5-client PIE session exercising M2–M9 together
@@ -755,3 +755,68 @@ Play-In-Editor clients on one machine. Packaging + the real multi-friend Tailsca
 
 **Build 0 core plumbing (M0-M9) is one milestone away from done.** Next: M9 (dev mode). After that,
 M10 is the full 5-client regression pass + network emulation gate.
+
+- **M9 done — clean compile on the first try, but a genuine bug turned up during verification.**
+  New `Source/Unreal_first_Game/Dev/DummyAIController.h/.cpp` (`AAIController`, explicit
+  `PrimaryActorTick.bCanEverTick = true` -- `AAIController` doesn't enable ticking by default the
+  way `AActor` subclasses that need it must): `EDummyBehavior` (`Idle`/`FollowPlayer`/`StandOn`),
+  `SetBehavior()`, and a `Tick` that does straight-line `AddMovementInput` toward `BehaviorTarget`
+  when not `Idle` -- deliberately no navmesh pathfinding (the level has no nav data, and M9's verify
+  step only needs dummies to exist/be possessable, not to actually navigate around obstacles). Added
+  `"AIModule"` to `Build.cs` for `AAIController`. `ACoopGameMode` gained `bDevMode` (`EditAnywhere`,
+  also settable via a `-devmode` command-line flag for packaged builds via `FParse::Param`) and
+  `FillEmptySlotsWithDummies()` (called from a new `BeginPlay` override): computes
+  `MaxPlayers - GameState->PlayerArray.Num()`, spawns that many `DefaultPawnClass` pawns via
+  `FindPlayerStart(nullptr)`, and possesses each with a fresh `ADummyAIController` set to `Idle`.
+  `ACoopPlayerController` gained three new console commands, all following the same shape
+  (`UFUNCTION(Exec)` on the client → `UFUNCTION(Server, Reliable)` for the actual effect, since Exec
+  runs locally on whichever machine typed it but Possess/state changes need authority):
+  `PossessDummy(int32 Index)` (finds all `ADummyAIController`s via `TActorIterator`, does the "swap"
+  CLAUDE.md §7 describes -- this controller takes the dummy's pawn, the dummy takes this
+  controller's old pawn back so it isn't left standing uncontrolled), `SceneSkip()` (stub, just
+  logs), `ToggleGodMode()` (flips a new `ACoopPlayerState::bInvulnerable`,
+  `UPROPERTY(Replicated)`, via a new `SetInvulnerable`/`IsInvulnerable` pair, same
+  `GetLifetimeReplicatedProps`/`DOREPLIFETIME` pattern as `CoopGameState`). Compiled clean on the
+  first attempt this time -- no repeat of M8's `Pawn`-shadowing mistake.
+  **Verify, solo PIE (1 real + 4 dummies):** set `bDevMode=true` on `BP_GameMode`'s CDO + recompile,
+  temporarily set `LevelEditorPlaySettings.playNumberOfClients=1`. `find_actors` confirmed exactly 5
+  `ACoopCharacter`s and exactly 4 `ADummyAIController`s; checked each character's `playerState` --
+  character `_0` had one (the real player), `_1`-`_4` didn't (dummy-possessed, since
+  `ADummyAIController` never requests a `PlayerState`) -- exactly "1 real + 4 dummies".
+  **Found a real bug while testing `ToggleGodMode`:** the command ran with no error, but its
+  confirmation log line never appeared. Rather than assume "the user mistyped it," checked the
+  actual live `PlayerState`'s class via `ObjectTools.get_class` -- **`/Script/Engine.PlayerState`,
+  not `ACoopPlayerState`**, despite `ACoopGameMode`'s C++ constructor setting
+  `PlayerStateClass = ACoopPlayerState::StaticClass()` since M2 (confirmed the raw C++ CDO,
+  `/Script/Unreal_first_Game.Default__CoopGameMode`, DID have it correctly set -- the break was
+  specifically in `BP_GameMode`'s own CDO, which read back `None`).
+  **Root cause, narrowed down after the fact:** `git diff` on `Content/Blueprints/BP_GameMode.uasset`
+  after fixing and saving showed **zero changes** -- meaning the last-committed version (saved at
+  the end of M8) already had `PlayerStateClass` set correctly, so the corruption was NOT a
+  long-standing bug from M2 as first suspected; it was introduced *during this session's own M9
+  work*, almost certainly by the `ObjectTools.set_properties({"bDevMode":true})` +
+  `compile_blueprint` cycle a few steps earlier in this same milestone, which silently reset this
+  completely unrelated, untouched property to its type default. (An earlier draft of this log entry
+  wrongly wrote this up as "broken since M2" and invented a second `Pawn`-shadowing compile error
+  that never actually happened in M9 -- both corrected here after checking the real build output and
+  `git diff` rather than trusting a first-pass narrative.)
+  **Fix:** re-set `PlayerStateClass` on `BP_GameMode`'s CDO explicitly (same pattern as the other
+  three class-reference properties) and recompiled; re-verified all five
+  (`PlayerStateClass`/`GameStateClass`/`DefaultPawnClass`/`PlayerControllerClass`/`bDevMode`) landed
+  and survived. **Practical rule for future sessions, stronger than M4's original gotcha #1:** after
+  *any* `set_properties` + `compile_blueprint` cycle on a Blueprint CDO, re-verify not just the
+  property you meant to change but every other class-reference property that Blueprint depends on --
+  a completely unrelated property can silently reset in the same compile step.
+  Re-verified with a fresh PIE session after the fix: `CoopPlayerState_0` now spawns correctly;
+  baseline `bInvulnerable=false`; after the user re-ran `ToggleGodMode`, both the replicated property
+  (`true`, read via reflection) and the log line (`"...is now invulnerable."`) confirmed correctly.
+  Re-tested `PossessDummy 0` too: character `_0`'s `playerState` went from set → `None`, and
+  character `_1`'s went from `None` → set -- the swap works exactly as designed.
+  **Cleanup:** restored `LevelEditorPlaySettings.playNumberOfClients` to `5` (for M10's full
+  regression pass) and set `BP_GameMode.bDevMode` back to `false` (dev mode is opt-in, not a
+  permanent default -- leaving it on would silently spawn 5 extra dummies alongside a real 5-client
+  session, since `FillEmptySlotsWithDummies` runs in `BeginPlay`, before any real players have
+  logged in to be counted). `StopPIE`, `save_assets([])`. **M9 is now fully closed.**
+
+**Build 0's core plumbing (M0-M9) is done.** Only M10 remains: the full 5-client regression pass +
+network emulation gate.

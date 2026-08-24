@@ -1,6 +1,7 @@
 #include "Core/CoopGameMode.h"
 #include "Core/CoopPlayerState.h"
 #include "Core/GameConstants.h"
+#include "Dev/DummyAIController.h"
 #include "GameFramework/GameStateBase.h"
 
 ACoopGameMode::ACoopGameMode()
@@ -37,4 +38,58 @@ void ACoopGameMode::PreLogin(const FString& Options, const FString& Address, con
 	{
 		ErrorMessage = FString::Printf(TEXT("Session is full (%d/%d players)."), GameState->PlayerArray.Num(), MaxPlayers);
 	}
+}
+
+void ACoopGameMode::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// -devmode lets a packaged Development build (CLAUDE.md §3.1) opt in without an Editor Class
+	// Defaults edit; bDevMode can also just be checked directly on BP_GameMode for PIE testing.
+	if (FParse::Param(FCommandLine::Get(), TEXT("devmode")))
+	{
+		bDevMode = true;
+	}
+
+	if (bDevMode)
+	{
+		FillEmptySlotsWithDummies();
+	}
+}
+
+void ACoopGameMode::FillEmptySlotsWithDummies()
+{
+	int32 MaxPlayers = FallbackMaxPlayers;
+	if (GameConstants)
+	{
+		MaxPlayers = GameConstants->MaxPlayers;
+	}
+
+	const int32 CurrentPlayers = GameState ? GameState->PlayerArray.Num() : 0;
+	const int32 DummiesToSpawn = FMath::Max(0, MaxPlayers - CurrentPlayers);
+
+	const AActor* SpawnPoint = FindPlayerStart(nullptr);
+	const FTransform SpawnTransform = SpawnPoint ? SpawnPoint->GetActorTransform() : FTransform::Identity;
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+	int32 SpawnedCount = 0;
+	for (int32 Index = 0; Index < DummiesToSpawn; ++Index)
+	{
+		APawn* DummyPawn = GetWorld()->SpawnActor<APawn>(DefaultPawnClass, SpawnTransform, SpawnParams);
+		ADummyAIController* DummyController = GetWorld()->SpawnActor<ADummyAIController>();
+		if (DummyPawn && DummyController)
+		{
+			DummyController->Possess(DummyPawn);
+			DummyController->SetBehavior(EDummyBehavior::Idle);
+			++SpawnedCount;
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("FillEmptySlotsWithDummies: failed to spawn dummy %d/%d."), Index + 1, DummiesToSpawn);
+		}
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("FillEmptySlotsWithDummies: spawned %d/%d dummies (MaxPlayers=%d, CurrentPlayers=%d)."), SpawnedCount, DummiesToSpawn, MaxPlayers, CurrentPlayers);
 }

@@ -18,11 +18,26 @@ class UNREAL_FIRST_GAME_API ACoopGameMode : public AGameModeBase
 public:
 	ACoopGameMode();
 
+	// M9: lets one person iterate without four friends online (CLAUDE.md §7's dev mode). Toggle in
+	// the Editor on BP_GameMode's Class Defaults, or via -devmode on the command line for a
+	// packaged build (checked in BeginPlay below).
+	UPROPERTY(EditAnywhere, Category = "Dev Mode")
+	bool bDevMode = false;
+
 protected:
 	// Rejects a 6th connecting player once 5 are already present, per CLAUDE.md §4.7.
 	virtual void PreLogin(const FString& Options, const FString& Address, const FUniqueNetIdRepl& UniqueId, FString& ErrorMessage) override;
 
+	virtual void BeginPlay() override;
+
 private:
+	// M9: fills every empty player slot (up to MaxPlayers) with an ADummyAIController-possessed
+	// ACoopCharacter, so a solo dev client can test a full 5-player session alone. Deliberately a
+	// one-shot fill at session start, not a live slot-tracking system -- CLAUDE.md §4.8, this is as
+	// much as "iterate alone" actually needs for Build 0.
+	void FillEmptySlotsWithDummies();
+
+
 	// Every tunable lives in DA_GameConstants per CLAUDE.md §10. Assigned as content wiring on
 	// BP_GameMode (the Blueprint subclass that's the project's actual GlobalDefaultGameMode), not
 	// hardcoded here. Left unset on the base C++ class on purpose. EditDefaultsOnly (no

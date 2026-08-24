@@ -16,10 +16,10 @@ public class Unreal_first_Game : ModuleRules
 		PublicIncludePaths.Add(ModuleDirectory);
 
 		// Kept minimal on purpose (Build 0, M1) — only what's actually needed compiles in. Add
-		// EnhancedInput/AIModule/GameplayTags to this list only when a later milestone (dev-mode
-		// dummy AI, status tags) actually needs them — CLAUDE.md §1: don't build ahead of what's
-		// needed yet. "UMG" added in M6 for the shared match-timer widget (CoopPlayerController's
-		// CreateWidget<UUserWidget>/AddToViewport call).
+		// EnhancedInput/GameplayTags to this list only when a later milestone (status tags) actually
+		// needs them — CLAUDE.md §1: don't build ahead of what's needed yet. "UMG" added in M6 for
+		// the shared match-timer widget (CreateWidget<UUserWidget>/AddToViewport). "AIModule" added
+		// in M9 for ADummyAIController (AAIController).
 		PublicDependencyModuleNames.AddRange(new string[]
 		{
 			"Core",
@@ -27,6 +27,7 @@ public class Unreal_first_Game : ModuleRules
 			"Engine",
 			"InputCore",
 			"UMG",
+			"AIModule",
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
