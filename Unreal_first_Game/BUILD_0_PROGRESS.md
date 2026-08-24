@@ -73,9 +73,9 @@ Play-In-Editor clients on one machine. Packaging + the real multi-friend Tailsca
 - [x] Verify: all 5 PIE clients see the same effect at the same time
 
 ## M8 — `DumpGameState` exec command
-- [ ] `UFUNCTION(Exec) DumpGameState()` on `CoopPlayerController`
-- [ ] Dumps GameState + every PlayerState (name, PlayerId, location, velocity, ping)
-- [ ] Verify: run on server and on a client, shared fields match
+- [x] `UFUNCTION(Exec) DumpGameState()` on `CoopPlayerController`
+- [x] Dumps GameState + every PlayerState (name, PlayerId, location, velocity, ping)
+- [x] Verify: run on server and on a client, shared fields match
 
 ## M9 — Dev mode
 - [ ] `Source/Unreal_first_Game/Dev/DummyAIController.h/.cpp` (Idle / FollowPlayer / StandOn(TargetActor))
@@ -716,3 +716,42 @@ Play-In-Editor clients on one machine. Packaging + the real multi-friend Tailsca
   PIE clients see the same effect at the same time, triggered by any one player" bar from the
   checklist. `StopPIE`, `save_assets([])`. **M7 is now fully closed.**
   Next: M8 (`DumpGameState` exec command).
+
+- **M8 done — one real compile error caught by the user's build output, verified with clean,
+  conclusive log evidence.** New `ACoopPlayerController::DumpGameState()` (`UFUNCTION(Exec)`):
+  builds a JSON-shaped `FString` (manual `FString::Printf` concatenation, not the `Json` module --
+  "JSON-shaped is fine" per CLAUDE.md §4.3, no need for real serialization) covering
+  `HasAuthority()`, `GameState->GetElapsedMatchTime()`, `GameState->IsButtonPressed()`, and one
+  entry per `GameState->PlayerArray` player (`PlayerId`, `GetPlayerName()`,
+  `GetPingInMilliseconds()`, and the possessed pawn's location/velocity if any), logged via
+  `UE_LOG(LogTemp, Log, ...)`. Included `HasAuthority` specifically so a server-vs-client dump pair
+  is self-identifying at a glance, per §10's diff-the-first-field-that-differs workflow.
+  **First compile attempt failed for real, non-trivial reasons** (full `Build.bat` invocation this
+  time, not Live Coding, which is why it surfaced things a Live Coding patch might not have):
+  1. `error C4458: declaration of 'Pawn' hides class member` -- a local `const APawn* Pawn` inside
+     `DumpGameState()` shadowed `AController::Pawn` (inherited by `APlayerController` →
+     `ACoopPlayerController`), which this project's warning level treats as an error. Renamed to
+     `PlayerPawn`. **Worth remembering: `Pawn` is a reserved-feeling name here specifically because
+     every PlayerController already has a `Pawn` member of its own -- avoid it for local variables
+     in PlayerController-adjacent code.**
+  2. A `UE_DEPRECATED(5.5, ...)` warning on direct `NetUpdateFrequency` access (from M6's
+     `CoopGameState.cpp`, only now surfaced by a full rebuild) -- switched to
+     `SetNetUpdateFrequency()`, the non-deprecated API, while already touching this compile cycle.
+  **Verify:** since Exec commands are only invokable from an actual in-game console (no
+  `unreal-mcp` tool injects console input into a live PIE session), asked the user to open the
+  console (`~`) and run `DumpGameState` once in the primary/host window and once in a remote client
+  window. Result, read directly from the log rather than summarized by the user:
+  - Host dump: `"HasAuthority": true`, 5 players, `PlayerId 326` (the host itself) at
+    `(0, 0, 302)` with `PingMs: 0`, the other four spread around it with real (16-18ms) pings.
+  - Two client dumps (`"HasAuthority": false`, run ~13s and ~20s later): **identical player
+    positions and IDs to the host's dump, down to the decimal** -- e.g. `PlayerId 327` at exactly
+    `(0, -70, 302)` in all three dumps -- and `ElapsedMatchTime` increasing monotonically and
+    consistently across all three samples (257.40 → 270.58 → 277.69, matching real elapsed
+    wall-clock time between the commands, never resetting or diverging).
+  This is exactly CLAUDE.md §10's desync-debugging workflow validated end-to-end: shared/replicated
+  state read identically from server and client, only per-machine fields (`HasAuthority`, each
+  player's own ping) differing as expected.
+  `StopPIE`, `save_assets([])`. **M8 is now fully closed.**
+
+**Build 0 core plumbing (M0-M9) is one milestone away from done.** Next: M9 (dev mode). After that,
+M10 is the full 5-client regression pass + network emulation gate.

@@ -8,8 +8,8 @@ class UGameConstants;
 class ACoopOrbitCamera;
 class UUserWidget;
 
-// Will also hold the DumpGameState exec command (M8) -- both Server RPCs and Exec commands are
-// PlayerController responsibilities in Unreal (each player has exactly one).
+// Server RPCs and Exec commands are PlayerController responsibilities in Unreal (each player has
+// exactly one).
 UCLASS()
 class UNREAL_FIRST_GAME_API ACoopPlayerController : public APlayerController
 {
@@ -22,6 +22,13 @@ public:
 	// button is now lit." Called by ACoopButton when this controller's own pawn overlaps it.
 	UFUNCTION(Server, Reliable)
 	void Server_PressButton();
+
+	// M8: console command (type "DumpGameState" in the in-game console on any machine -- server or
+	// client). Walks GameState + every PlayerState and logs a JSON-shaped snapshot via UE_LOG, per
+	// CLAUDE.md §4.3/§10's desync-debugging workflow: run this on the server, run it again on a
+	// disagreeing client, diff the first field that differs.
+	UFUNCTION(Exec)
+	void DumpGameState();
 
 protected:
 	virtual void BeginPlay() override;

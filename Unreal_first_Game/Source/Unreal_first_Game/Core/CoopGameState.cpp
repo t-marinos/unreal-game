@@ -18,7 +18,7 @@ void ACoopGameState::BeginPlay()
 	{
 		// CLAUDE.md §4.4: an explicit, known, debuggable replication rate rather than the engine's
 		// per-class default.
-		NetUpdateFrequency = GameConstants->GameStateNetUpdateFrequency;
+		SetNetUpdateFrequency(GameConstants->GameStateNetUpdateFrequency);
 	}
 	else
 	{

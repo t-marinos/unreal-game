@@ -3,6 +3,8 @@
 #include "Core/CoopGameState.h"
 #include "Camera/CoopOrbitCamera.h"
 #include "Blueprint/UserWidget.h"
+#include "GameFramework/PlayerState.h"
+#include "GameFramework/Pawn.h"
 
 ACoopPlayerController::ACoopPlayerController()
 {
@@ -55,4 +57,52 @@ void ACoopPlayerController::BeginPlay()
 			MatchTimerWidget->AddToViewport();
 		}
 	}
+}
+
+void ACoopPlayerController::DumpGameState()
+{
+	const ACoopGameState* CoopGameState = GetWorld() ? GetWorld()->GetGameState<ACoopGameState>() : nullptr;
+	if (!CoopGameState)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("DumpGameState: no GameState yet."));
+		return;
+	}
+
+	FString Dump = TEXT("{\n");
+	Dump += FString::Printf(TEXT("  \"HasAuthority\": %s,\n"), HasAuthority() ? TEXT("true") : TEXT("false"));
+	Dump += FString::Printf(TEXT("  \"ElapsedMatchTime\": %.2f,\n"), CoopGameState->GetElapsedMatchTime());
+	Dump += FString::Printf(TEXT("  \"ButtonPressed\": %s,\n"), CoopGameState->IsButtonPressed() ? TEXT("true") : TEXT("false"));
+	Dump += TEXT("  \"Players\": [\n");
+
+	const TArray<TObjectPtr<APlayerState>>& Players = CoopGameState->PlayerArray;
+	for (int32 Index = 0; Index < Players.Num(); ++Index)
+	{
+		const APlayerState* PS = Players[Index];
+		if (!PS)
+		{
+			continue;
+		}
+
+		FVector Location = FVector::ZeroVector;
+		FVector Velocity = FVector::ZeroVector;
+		if (const APawn* PlayerPawn = PS->GetPawn())
+		{
+			Location = PlayerPawn->GetActorLocation();
+			Velocity = PlayerPawn->GetVelocity();
+		}
+
+		Dump += FString::Printf(
+			TEXT("    { \"PlayerId\": %d, \"Name\": \"%s\", \"PingMs\": %.0f, \"Location\": {\"X\": %.1f, \"Y\": %.1f, \"Z\": %.1f}, \"Velocity\": {\"X\": %.1f, \"Y\": %.1f, \"Z\": %.1f} }%s\n"),
+			PS->GetPlayerId(),
+			*PS->GetPlayerName(),
+			PS->GetPingInMilliseconds(),
+			Location.X, Location.Y, Location.Z,
+			Velocity.X, Velocity.Y, Velocity.Z,
+			(Index < Players.Num() - 1) ? TEXT(",") : TEXT("")
+		);
+	}
+
+	Dump += TEXT("  ]\n}");
+
+	UE_LOG(LogTemp, Log, TEXT("DumpGameState:\n%s"), *Dump);
 }
