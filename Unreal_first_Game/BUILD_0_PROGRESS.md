@@ -50,10 +50,10 @@ Play-In-Editor clients on one machine. Packaging + the real multi-friend Tailsca
 - [x] Verify: `MaxPlayers` read from data asset (6th-client rejection itself deferred to M10 -- see log)
 
 ## M4 — Character conversion + per-player colour tint
-- [ ] Duplicate `BP_ThirdPersonCharacter` → `Content/Blueprints/Characters/BP_PlayerCharacter`, reparent to `ACoopCharacter`
-- [ ] Deterministic per-player Dynamic Material Instance colour tint keyed off `PlayerState->PlayerId`
-- [ ] Point `BP_GameMode`'s `DefaultPawnClass` at `BP_PlayerCharacter`
-- [ ] Verify: 5 PIE clients, 5 distinct colours, consistent across all clients
+- [x] Duplicate `BP_ThirdPersonCharacter` → `Content/Blueprints/Characters/BP_PlayerCharacter`, reparent to `ACoopCharacter`
+- [x] Deterministic per-player Dynamic Material Instance colour tint keyed off `PlayerState->PlayerId`
+- [x] Point `BP_GameMode`'s `DefaultPawnClass` at `BP_PlayerCharacter`
+- [x] Verify: 5 PIE clients, 5 distinct colours, consistent across all clients
 
 ## M5 — Local-only orbit camera
 - [ ] `Source/Unreal_first_Game/Camera/CoopOrbitCamera.h/.cpp` (never replicated)
@@ -400,3 +400,114 @@ Play-In-Editor clients on one machine. Packaging + the real multi-friend Tailsca
   last built on disk, so this needs a real check — e.g. an in-editor Live Coding compile or
   `LiveCodingToolset.CompileLiveCoding` via unreal-mcp — not an assumption), then continue with
   steps 2–7 unchanged.
+
+- **M4 resumed — steps 1–6 done, but found and fixed a real gameplay bug along the way; one more
+  compile+verify needed before M4 can close.** New session, Editor already running with
+  `unreal-mcp` tools discoverable immediately (no restart needed this time).
+
+  **Step 1 confirmed:** the `CoopCharacter.cpp` tint code from the paused session did compile —
+  `Binaries/Win64/UnrealEditor-Unreal_first_Game.dll` has a later mtime than the `.cpp`'s last edit,
+  and the module loads cleanly in `Saved/Logs/Unreal_first_Game.log` with no errors around
+  `InternalLoadLibrary: 'Unreal_first_Game'`.
+
+  **Steps 2–5 done via `unreal-mcp`:** `AssetTools.duplicate` →
+  `/Game/Blueprints/Characters/BP_PlayerCharacter`; `BlueprintTools.set_parent` to
+  `/Script/Unreal_first_Game.CoopCharacter` (note: the `blueprint`/`asset` ref params need the full
+  `Package.AssetName` path, e.g. `/Game/Blueprints/Characters/BP_PlayerCharacter.BP_PlayerCharacter`
+  — the bare package path alone errors as "not a valid object path"); `compile_blueprint`; verified
+  via `get_parent`/`get_asset_class`. Confirmed the duplicate kept `BP_ThirdPersonCharacter`'s
+  component tree intact (`CharacterMesh0`, `CameraBoom`, `FollowCamera`, `CharMoveComp` all present
+  via `ActorTools.get_components`) — reparenting a Blueprint to a new C++ parent does not touch its
+  own SCS components. `ObjectTools.set_properties` set `BP_GameMode`'s CDO `DefaultPawnClass` to
+  `BP_PlayerCharacter_C`; `AssetTools.save_assets([])` saved everything dirty.
+
+  **Also set up genuine multi-client PIE for verification** (the M4 log's open question — yes, this
+  is reachable via the same CDO-editing trick M3 used for `GameMapsSettings`): the object path is
+  `/Script/UnrealEd.Default__LevelEditorPlaySettings`, and its properties use lowerCamelCase in this
+  MCP server's reflection (`playNumberOfClients`, `playNetMode`, `runUnderOneProcess`) even though
+  `list_properties`/`get_properties` disagree with the PascalCase shown in the C++ source — set
+  `playNumberOfClients=5` and `playNetMode=PIE_ListenServer` (was `PIE_Standalone`);
+  `runUnderOneProcess` was already `true`. `StartPIE` with these settings genuinely spawns 5 client
+  connections (confirmed via `LogNet: Login request` × 4 + the host, all against
+  `Game: /Game/Blueprints/BP_GameMode.BP_GameMode_C`, zero errors/warnings in the startup log).
+
+  **Found gotcha #1 — a raw `ObjectTools.set_properties` edit on a Blueprint CDO does not reliably
+  survive into what a subsequent PIE session actually spawns, even though a `get_properties` read
+  right after the write (and even after `save_assets`) keeps confirming the new value.** First
+  5-client PIE run: `SceneTools.find_actors` for `/Script/Unreal_first_Game.CoopCharacter` returned
+  `[]`; broadening to `/Script/Engine.Pawn` showed 5 `DefaultPawn_0..4` actors — the *old* default,
+  not `BP_PlayerCharacter_C`. Re-checking the live GameMode instance's own `DefaultPawnClass`
+  (`ObjectTools.get_properties` on the actual spawned `BP_GameMode_C_0` actor, found via
+  `find_actors` on `/Script/Unreal_first_Game.CoopGameMode`) showed `/Script/Engine.DefaultPawn`,
+  while the CDO simultaneously still read back `BP_PlayerCharacter_C` — i.e. the editor's CDO and
+  the value PIE actually used had diverged. **Fix that worked:** `StopPIE`, then an explicit
+  `BlueprintTools.compile_blueprint` on `BP_GameMode` itself (not just the CDO property poke),
+  re-`save_assets`, then a fresh `StartPIE` — after this, `find_actors` for `CoopCharacter`
+  correctly returned all 5 as `BP_PlayerCharacter_C_0..4`. **Practical rule for future sessions:**
+  after `ObjectTools.set_properties` on any Blueprint's CDO (not just instance properties), always
+  follow with an explicit `compile_blueprint` on that same Blueprint before trusting the change in a
+  fresh PIE session — a `get_properties` readback confirming the value is not sufficient proof it
+  will hold. (This narrows what M3's log claimed worked without this step — M3's case may have
+  worked by chance, or the reinstancing trigger is inconsistent; treat the always-recompile version
+  as the safe rule going forward.)
+
+  **Found gotcha #2 — a real, non-tooling gameplay bug in the tint logic itself, caught by verifying
+  through direct object reflection instead of trusting a screenshot.** `EditorAppToolset.CaptureViewport`
+  during a multi-client PIE session captures the *editor's own* level viewport, which stays in
+  edit-mode (shows the `PlayerStart` gizmo, no characters) once `runUnderOneProcess` pops separate
+  windows per client — it is not a way to see live gameplay here. `CaptureEditorImage` (whole desktop)
+  did show all 5 real PIE windows, but none rendered a visible character either, which prompted a
+  deeper check. Queried each spawned character's `CharacterMesh0.OverrideMaterials` and the dynamic
+  material's `VectorParameterValues` directly instead: only `BP_PlayerCharacter_C_0` (the host's own
+  pawn — `remoteRole=SimulatedProxy`, no owning `NetConnection`) had a tint applied
+  (`Paint Tint = (0.05, 0.3, 1, 1)`, Blue); all four remote clients' pawns
+  (`remoteRole=AutonomousProxy`) had `OverrideMaterials: []` on the **server's own copy** — i.e.
+  untinted, forever, on exactly the world the host actually renders (a Listen Server's host renders
+  its own authoritative world directly, no separate client hop).
+  **Root cause, confirmed against engine source** (`Pawn.h`/`Pawn.cpp`): `AGameModeBase::RestartPlayer`
+  calls `SpawnDefaultPawnFor` (which fires `BeginPlay` synchronously, since the world has already
+  begun play) and only *afterwards* calls `Possess()`, which is what actually sets `PlayerState` on
+  the pawn (`APawn::PossessedBy` → `SetPlayerState(...)`, and `Pawn.h` explicitly documents
+  `PossessedBy` as "Only called on the server (or in standalone)"). So `BeginPlay`'s
+  `if (GetPlayerState())` check was always false on the server for every pawn whose `Possess()` call
+  hadn't already happened by spawn time — and `OnRep_PlayerState`, the code's other trigger, is a
+  replication notify that structurally never fires on the authoritative server, only on a machine
+  receiving the replicated value. `BP_PlayerCharacter_C_0` getting tinted appears to be
+  host/local-pawn-specific timing luck, not something the code actually guaranteed.
+  **Fix applied** (`Source/Unreal_first_Game/Core/CoopCharacter.h/.cpp`): added an
+  `override void PossessedBy(AController* NewController)` that calls `Super::PossessedBy` (which sets
+  `PlayerState`) and then `ApplyPlayerColorTint()` — this is the one hook guaranteed to run
+  server-side, after `PlayerState` is valid, for every pawn regardless of host-vs-remote. `BeginPlay`
+  and `OnRep_PlayerState` are left in place unchanged (harmless, still useful for `OnRep_PlayerState`
+  on each remote client's own rendering of the world, and `BeginPlay` as a no-op fallback for any
+  future case where `PlayerState` is already valid at spawn).
+  **Not yet compiled or re-verified** — `PIE` was stopped before this edit; needs the user to trigger
+  a Live Coding recompile (Ctrl+Alt+F11, editor is open) before continuing.
+
+  **NOT done yet — pick up here:**
+  1. Ask the user to press Ctrl+Alt+F11 in the Editor to recompile with the `PossessedBy` fix above.
+     Confirm success (no `LogLiveCoding: Error` in `Saved/Logs/Unreal_first_Game.log`).
+  2. Start a fresh 5-client PIE session (`LevelEditorPlaySettings` is already configured:
+     `playNumberOfClients=5`, `playNetMode=PIE_ListenServer`, `runUnderOneProcess=true` — no need to
+     re-set these unless they get reset).
+  3. Re-run the same reflection-based check used above (`SceneTools.find_actors` for
+     `/Script/Unreal_first_Game.CoopCharacter`, then `ActorTools.get_components` → `CharacterMesh0`
+     → `ObjectTools.get_properties` on `OverrideMaterials` → `VectorParameterValues` on each dynamic
+     material instance) across **all 5** spawned characters this time, not just one — confirm every
+     one has a non-empty tint and that the 5 tints are the 5 distinct colours from
+     `GetColorForPlayerId` (cross-check against each character's `playerState.playerId`).
+  4. `StopPIE` once confirmed.
+  5. Update this file's M4 checkboxes and log a short completion entry.
+
+- **M4 done — fix compiled clean, all 5 characters confirmed distinctly tinted.** User triggered
+  Ctrl+Alt+F11; log shows `LogLiveCoding: Display: Live coding succeeded` with
+  `Reload/Re-instancing Complete: 1 package changed, 6 classes unchanged`, no errors. Fresh 5-client
+  PIE session (same settings as before), re-ran the reflection check across all 5
+  `BP_PlayerCharacter_C_0..4`: every one now has non-empty `OverrideMaterials`, and the `Paint Tint`
+  `VectorParameterValues` read back as `_0`=Blue `(0.05,0.3,1)`, `_1`=Green `(0.1,0.9,0.1)`,
+  `_2`=Yellow `(1,0.85,0)`, `_3`=Purple `(0.7,0.1,0.9)`, `_4`=Red `(1,0.05,0.05)` — all 5 of
+  `GetColorForPlayerId`'s colours present, each exactly once. `StopPIE`, `save_assets([])`.
+  **M4 is now fully closed**, including a real fix (the `PossessedBy` override — see gotcha #2
+  above) that the M4 plan's original scope didn't anticipate needing but its own verify step
+  ("5 distinct colours, consistent across all clients") correctly caught.
+  Next: M5 (local-only orbit camera).

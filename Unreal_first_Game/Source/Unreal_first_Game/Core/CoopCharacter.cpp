@@ -22,6 +22,14 @@ void ACoopCharacter::OnRep_PlayerState()
 	ApplyPlayerColorTint();
 }
 
+void ACoopCharacter::PossessedBy(AController* NewController)
+{
+	// Super sets PlayerState (see APawn::PossessedBy) -- must run first so
+	// ApplyPlayerColorTint sees the real PlayerId, not null.
+	Super::PossessedBy(NewController);
+	ApplyPlayerColorTint();
+}
+
 FLinearColor ACoopCharacter::GetColorForPlayerId(int32 PlayerId)
 {
 	// Five visually distinct colours, one per player slot (CLAUDE.md §6.1: exactly 5 players).
