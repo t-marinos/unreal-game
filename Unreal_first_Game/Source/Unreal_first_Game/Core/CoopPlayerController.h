@@ -60,6 +60,16 @@ public:
 	UFUNCTION(Server, Reliable)
 	void Server_ClaimRole(EPlayerRole DesiredRole);
 
+	// Build 1, M6: debug command for verifying health replication/clamping/depletion (no gameplay
+	// ability applies damage yet -- that's M7's Shield/M8's Stabilize). Type on whichever machine
+	// controls the pawn to be damaged; same intent-only Exec-then-Server-RPC shape as
+	// ToggleGodMode/PossessDummy above.
+	UFUNCTION(Exec)
+	void ApplyTestDamage(float Amount);
+
+	UFUNCTION(Server, Reliable)
+	void Server_ApplyTestDamage(float Amount);
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -83,4 +93,21 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UUserWidget> MatchTimerWidget;
+
+	// Build 1, M5: WBP_RoleSelect and WBP_PrepArenaHUD, same pattern as MatchTimerWidgetClass above
+	// -- created once and left in the viewport, each independently reading GameState's current
+	// phase (via UCoopRoleSelectWidget::GetRoleSelectVisibility / UCoopPrepCountdownWidget::
+	// GetPrepArenaVisibility) to show/hide itself rather than being toggled externally on a phase
+	// transition event, matching the established replicated-state-drives-cosmetic pattern.
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UUserWidget> RoleSelectWidgetClass;
+
+	UPROPERTY()
+	TObjectPtr<UUserWidget> RoleSelectWidget;
+
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UUserWidget> PrepArenaHUDWidgetClass;
+
+	UPROPERTY()
+	TObjectPtr<UUserWidget> PrepArenaHUDWidget;
 };

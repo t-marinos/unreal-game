@@ -13,3 +13,10 @@ FText UCoopPrepCountdownWidget::GetPrepRemainingSecondsText() const
 	const float Remaining = FMath::Max(0.0f, GameState->GetPrepPhaseEndServerTime() - GameState->GetServerWorldTimeSeconds());
 	return FText::AsNumber(FMath::RoundToInt(Remaining));
 }
+
+ESlateVisibility UCoopPrepCountdownWidget::GetPrepArenaVisibility() const
+{
+	const ACoopGameState* GameState = Cast<ACoopGameState>(UGameplayStatics::GetGameState(this));
+	const bool bActive = GameState && GameState->GetCurrentPhase() == EMatchPhase::Prep;
+	return bActive ? ESlateVisibility::Visible : ESlateVisibility::Collapsed;
+}

@@ -72,4 +72,9 @@ public:
 	// hints for the full 60s, not have it eaten by however long role selection took.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Match")
 	float PrepArenaDurationSeconds = 60.0f;
+
+	// Build 1, M6: every ACoopCharacter's starting/max HP (UCoopHealthComponent). Shield's damage
+	// negation (M7) and Downed's 0-HP trigger (M9) both build on this.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Health")
+	float DefaultMaxHealth = 100.0f;
 };

@@ -3,6 +3,8 @@
 #include "Core/CoopGameState.h"
 #include "Core/CoopPlayerState.h"
 #include "Core/CoopGameMode.h"
+#include "Core/CoopCharacter.h"
+#include "Core/CoopHealthComponent.h"
 #include "Dev/DummyAIController.h"
 #include "Camera/CoopOrbitCamera.h"
 #include "Blueprint/UserWidget.h"
@@ -59,6 +61,27 @@ void ACoopPlayerController::BeginPlay()
 		if (MatchTimerWidget)
 		{
 			MatchTimerWidget->AddToViewport();
+		}
+	}
+
+	// Build 1, M5: role-select screen and prep-arena HUD (ability cards + synergy hint). Both are
+	// created once here and stay in the viewport for the whole match, same reasoning as
+	// MatchTimerWidget above -- each one's own Visibility binding hides it outside its phase.
+	if (RoleSelectWidgetClass)
+	{
+		RoleSelectWidget = CreateWidget<UUserWidget>(this, RoleSelectWidgetClass);
+		if (RoleSelectWidget)
+		{
+			RoleSelectWidget->AddToViewport();
+		}
+	}
+
+	if (PrepArenaHUDWidgetClass)
+	{
+		PrepArenaHUDWidget = CreateWidget<UUserWidget>(this, PrepArenaHUDWidgetClass);
+		if (PrepArenaHUDWidget)
+		{
+			PrepArenaHUDWidget->AddToViewport();
 		}
 	}
 }
@@ -177,5 +200,23 @@ void ACoopPlayerController::Server_ClaimRole_Implementation(EPlayerRole DesiredR
 	if (CoopPS && CoopGameMode)
 	{
 		CoopGameMode->TryClaimRole(CoopPS, DesiredRole);
+	}
+}
+
+void ACoopPlayerController::ApplyTestDamage(float Amount)
+{
+	Server_ApplyTestDamage(Amount);
+}
+
+void ACoopPlayerController::Server_ApplyTestDamage_Implementation(float Amount)
+{
+	if (ACoopCharacter* CoopCharacter = Cast<ACoopCharacter>(GetPawn()))
+	{
+		if (UCoopHealthComponent* Health = CoopCharacter->GetHealthComponent())
+		{
+			Health->ApplyDamage(Amount);
+			UE_LOG(LogTemp, Log, TEXT("ApplyTestDamage: %s took %.1f, now %.1f/%.1f."),
+				*GetNameSafe(CoopCharacter), Amount, Health->GetCurrentHealth(), Health->GetMaxHealth());
+		}
 	}
 }

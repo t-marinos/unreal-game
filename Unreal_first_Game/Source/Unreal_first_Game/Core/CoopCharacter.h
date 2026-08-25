@@ -4,6 +4,8 @@
 #include "GameFramework/Character.h"
 #include "CoopCharacter.generated.h"
 
+class UCoopHealthComponent;
+
 // Mesh/animation come from a Blueprint reparent of BP_ThirdPersonCharacter (M4), keeping its
 // already-working setup -- this class only adds the per-player colour tint on top.
 // Default CharacterMovementComponent prediction is left untouched here and stays on
@@ -13,6 +15,14 @@ UCLASS()
 class UNREAL_FIRST_GAME_API ACoopCharacter : public ACharacter
 {
 	GENERATED_BODY()
+
+public:
+	ACoopCharacter();
+
+	// Build 1, M6. Every ACoopCharacter gets one -- Shield's damage negation (M7) and Downed's
+	// 0-HP trigger (M9) both read/subscribe through this.
+	UFUNCTION(BlueprintPure, Category = "Health")
+	UCoopHealthComponent* GetHealthComponent() const { return HealthComponent; }
 
 protected:
 	virtual void BeginPlay() override;
@@ -33,4 +43,7 @@ private:
 	void ApplyPlayerColorTint();
 
 	static FLinearColor GetColorForPlayerId(int32 PlayerId);
+
+	UPROPERTY(VisibleAnywhere, Category = "Health")
+	TObjectPtr<UCoopHealthComponent> HealthComponent;
 };

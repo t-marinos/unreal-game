@@ -41,6 +41,13 @@ FText UCoopRoleSelectWidget::GetRoleSelectRemainingSecondsText() const
 	return FText::AsNumber(FMath::RoundToInt(Remaining));
 }
 
+ESlateVisibility UCoopRoleSelectWidget::GetRoleSelectVisibility() const
+{
+	const ACoopGameState* GameState = Cast<ACoopGameState>(UGameplayStatics::GetGameState(this));
+	const bool bActive = GameState && GameState->GetCurrentPhase() == EMatchPhase::RoleSelect;
+	return bActive ? ESlateVisibility::Visible : ESlateVisibility::Collapsed;
+}
+
 void UCoopRoleSelectWidget::ClaimRole(EPlayerRole DesiredRole)
 {
 	if (ACoopPlayerController* CoopPC = Cast<ACoopPlayerController>(GetOwningPlayer()))

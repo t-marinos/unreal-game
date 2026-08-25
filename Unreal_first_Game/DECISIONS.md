@@ -118,3 +118,29 @@ implementation don't disagree.
 roles (TANK/SUPPORT/RUNNER/CONTROL/DAMAGE), still exactly one player per role, still temporary
 to the run rather than persistent. Only the assignment *mechanism* changed, from random shuffle
 to player claim with a randomized timeout fallback.
+
+## Live Coding must not be used to add a new UCLASS/UPROPERTY/UFUNCTION
+
+**Decision:** Live Coding (Ctrl+Alt+F11 / the in-editor "Compile" button) is only safe for
+editing the *body* of functions on classes that already exist and are already loaded. Adding a
+new `UCLASS`/`USTRUCT`/`UENUM`, adding a new `UPROPERTY`/`UFUNCTION` to an existing reflected
+class, or changing a class's inheritance requires closing the editor and doing a full build
+(Visual Studio/Rider Build, or `Engine\Build\BatchFiles\Build.bat`) before reopening it.
+
+**Why:** during Build 1 (2026-08-24), adding `UCoopAbilityCardWidget` (a new `UUserWidget`
+subclass with new `UPROPERTY`/`UFUNCTION` members) and then triggering a Live Coding compile
+crashed the editor: `EXCEPTION_ACCESS_VIOLATION` inside the freshly-linked `patch_0` DLL's
+`DllMain`, in the dynamic initializer for a UMG stat counter (`StatPtr_STAT_CreateWidget`,
+`UserWidget.h:1816`). The editor log showed the crash landed within seconds of the patch DLL
+finishing linking — `Starting Live Coding compile` → `link.exe` creates `patch_0.lib/.exp` →
+`RequestExit(..., EngineUnhandledExceptionFilter)`. Live Coding's patch DLL runs its static
+initializers inside `DllMain` under the Windows loader lock; that's tolerant of function-body-only
+changes (confirmed working all day — 20 successful patches, `patch_0`...`patch_19`, in the prior
+session) but not of new reflected types/members, which is a known Live Coding limitation, not a
+bug in the widget code itself. No source was lost — the crash happened after the edited `.cpp`/
+`.h` files were already saved to disk and successfully linked; only the in-memory patch load
+failed.
+
+**Still true / unchanged:** built-in movement prediction, replication, and every other engine
+behavior are unaffected — this is purely an editor-workflow rule about when Live Coding vs. a
+full rebuild is required, not an architecture change.

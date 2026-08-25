@@ -1,7 +1,13 @@
 #include "Core/CoopCharacter.h"
+#include "Core/CoopHealthComponent.h"
 #include "GameFramework/PlayerState.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
+
+ACoopCharacter::ACoopCharacter()
+{
+	HealthComponent = CreateDefaultSubobject<UCoopHealthComponent>(TEXT("HealthComponent"));
+}
 
 void ACoopCharacter::BeginPlay()
 {
