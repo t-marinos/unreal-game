@@ -70,6 +70,17 @@ public:
 	UFUNCTION(Server, Reliable)
 	void Server_ApplyTestDamage(float Amount);
 
+	// Build 1, M7: bound to IA_Shield's Enhanced Input event in BP_PlayerCharacter's EventGraph
+	// (CLAUDE.md §3.2's hybrid split -- the ability itself resolves in C++, Blueprint only wires
+	// the keypress to this call). A thin BlueprintCallable wrapper around the Server RPC, same
+	// shape as UCoopRoleSelectWidget::ClaimTank()/etc. wrapping Server_ClaimRole -- Blueprint never
+	// calls a raw Server_* RPC directly in this project.
+	UFUNCTION(BlueprintCallable, Category = "Abilities")
+	void ActivateShield();
+
+	UFUNCTION(Server, Reliable)
+	void Server_ActivateShield();
+
 protected:
 	virtual void BeginPlay() override;
 

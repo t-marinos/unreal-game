@@ -5,6 +5,7 @@
 #include "Core/CoopGameMode.h"
 #include "Core/CoopCharacter.h"
 #include "Core/CoopHealthComponent.h"
+#include "Abilities/CoopTankAbilities.h"
 #include "Dev/DummyAIController.h"
 #include "Camera/CoopOrbitCamera.h"
 #include "Blueprint/UserWidget.h"
@@ -219,4 +220,24 @@ void ACoopPlayerController::Server_ApplyTestDamage_Implementation(float Amount)
 				*GetNameSafe(CoopCharacter), Amount, Health->GetCurrentHealth(), Health->GetMaxHealth());
 		}
 	}
+}
+
+void ACoopPlayerController::ActivateShield()
+{
+	Server_ActivateShield();
+}
+
+void ACoopPlayerController::Server_ActivateShield_Implementation()
+{
+	// Shield is Tank-only. A non-Tank pressing the key is a harmless no-op -- friends, not
+	// adversarial input (CLAUDE.md §8) -- rather than something that needs client-side UI gating in
+	// Build 1's stub-only ability cards for the other roles.
+	const ACoopPlayerState* CoopPS = GetPlayerState<ACoopPlayerState>();
+	ACoopCharacter* CoopCharacter = Cast<ACoopCharacter>(GetPawn());
+	if (!CoopPS || !CoopCharacter || CoopPS->GetRole() != EPlayerRole::Tank)
+	{
+		return;
+	}
+
+	CoopTankAbilities::ApplyShield(CoopCharacter, GameConstants);
 }

@@ -1,6 +1,8 @@
 #include "Core/CoopHealthComponent.h"
 #include "Core/GameConstants.h"
 #include "Core/CoopPlayerState.h"
+#include "Core/CoopCharacter.h"
+#include "Tags/CoopGameplayTags.h"
 #include "Net/UnrealNetwork.h"
 #include "GameFramework/Pawn.h"
 
@@ -50,6 +52,20 @@ void UCoopHealthComponent::ApplyDamage(float DamageAmount)
 			{
 				return;
 			}
+		}
+	}
+
+	// Build 1, M7: Tank's Shield negates all incoming damage while Status.Shielded is active.
+	// Simplification, not the full spec -- docs/abilities.md describes Shield as blocking damage
+	// "from that facing" only, but ApplyDamage has no damage-source location to check a facing
+	// against, and nothing in the codebase deals real damage yet (M11's monsters are the first).
+	// Negating unconditionally is the simple version CLAUDE.md §1 asks for; a directional check is
+	// a contained follow-up once there's an actual attack to test it against.
+	if (const ACoopCharacter* OwningCharacter = Cast<ACoopCharacter>(GetOwner()))
+	{
+		if (OwningCharacter->HasStatusTag(CoopGameplayTags::Status_Shielded))
+		{
+			return;
 		}
 	}
 

@@ -98,14 +98,16 @@ re-verify per the same reflection+screenshot method already established (5-clien
       confirmed by code review only (no bound listener until M9) — see log
 
 ## M7 — Tank Shield Ability
-- [ ] `Source/Unreal_first_Game/Abilities/CoopTankAbilities.h/.cpp` — `ApplyShield()`, coverage
+- [x] `Source/Unreal_first_Game/Abilities/CoopTankAbilities.h/.cpp` — `ApplyShield()`, coverage
       query, damage negation
-- [ ] `ACoopCharacter`: replicated `ActiveStatusTags` + server-tracked expiry map
-- [ ] `CoopPlayerController.h/.cpp`: `Server_ActivateShield()`
-- [ ] New Input Action `IA_Shield` wired into `IMC_Default`/`BP_PlayerController`
-- [ ] New DA_GameConstants: `ShieldDurationSeconds`, `ShieldCooldownSeconds`,
+- [x] `ACoopCharacter`: replicated `ActiveStatusTags` + server-tracked expiry map
+- [x] `CoopPlayerController.h/.cpp`: `Server_ActivateShield()`
+- [x] New Input Action `IA_Shield` wired into `IMC_Default`/`BP_PlayerController`
+- [x] New DA_GameConstants: `ShieldDurationSeconds`, `ShieldCooldownSeconds`,
       `ShieldCoverageAngleDegrees`, `ShieldCoverageRadiusUnits`
-- [ ] Verify: reflection for tag/expiry/negation; human keypress + playtest for feel
+- [ ] Verify: reflection for tag/expiry/negation; human keypress + playtest for feel — **tag
+      application and damage negation confirmed live this session; expiry confirmation was
+      interrupted, pick back up per the log's "Next" note before checking this box**
 
 ## M8 — Control Stabilize + Fortress Synergy Conditional
 - [ ] `Source/Unreal_first_Game/Abilities/CoopControlAbilities.h/.cpp` — `ResolveStabilize()` with
@@ -519,3 +521,146 @@ re-verify per the same reflection+screenshot method already established (5-clien
   Both M5's remaining widget C++ and M6 are now fully verified (M5's checkbox itself stays unchecked
   per the still-parked text-wrap width bug — unrelated, cosmetic, untouched this session). Next: M7
   (Tank Shield Ability).
+
+- **M7 started — C++ and the Input Action asset done; paused for a required full rebuild before
+  continuing.** Added `Source/Unreal_first_Game/Abilities/CoopTankAbilities.h/.cpp` (first file in
+  `Abilities/`): a plain `namespace CoopTankAbilities` (not a `UCLASS` — server-only resolution
+  logic, no reason to be reflected, per CLAUDE.md §4.6) holding `ApplyShield(ACoopCharacter* Tank,
+  const UGameConstants* GameConstants)`. It cooldown-gates via a new `ShieldCooldownEndServerTime`
+  field on `ACoopCharacter`, applies `Status.Shielded` to Tank via a new shared status-tag mechanism
+  (see below), then iterates every `ACoopCharacter` via `TActorIterator` and applies the same tag to
+  anyone within `ShieldCoverageRadiusUnits`/`ShieldCoverageAngleDegrees` of Tank's forward vector —
+  a cast-time snapshot per docs/abilities.md ("the actor(s) currently standing behind it"), not a
+  per-hit direction check.
+  **`ACoopCharacter` gained the shared status-tag mechanism M7/M8/M9 all need:** a replicated
+  `FGameplayTagContainer ActiveStatusTags`, a non-replicated `TMap<FGameplayTag, float>
+  StatusTagExpiryServerTime` (server-only, kept purely for reflection-based debugging per CLAUDE.md
+  §4.3), and a plain `TMap<FGameplayTag, FTimerHandle> StatusTagExpiryTimers` driving actual removal.
+  `ApplyStatusTag(Tag, DurationSeconds)`/`RemoveStatusTag(Tag)` are server-only
+  (`HasAuthority()`-gated); `HasStatusTag(Tag)` is `BlueprintPure` and safe on any client since it
+  just reads the replicated container. Timer-driven expiry uses `GetWorldTimerManager().SetTimer`
+  with a duration in seconds (not per-frame `DeltaTime` accumulation), and the recorded expiry
+  timestamp itself comes from `AGameStateBase::GetServerWorldTimeSeconds()` — satisfies CLAUDE.md
+  §4.4/§4.5 without a manual Tick-based poll loop.
+  **`UCoopHealthComponent::ApplyDamage`** gained a `Status.Shielded` early-out negation check.
+  **Documented simplification, not the full spec:** negates *all* incoming damage while shielded,
+  not just damage "from that facing" as docs/abilities.md describes — `ApplyDamage` has no damage-
+  source location to check a facing against, and nothing in the codebase deals real damage yet
+  (M11's monsters are the first real attacker). Flagged in a comment as a contained follow-up for
+  whenever a real attack exists to test a directional check against, per CLAUDE.md §1's "simple
+  now, note the tradeoff" allowance.
+  **`ACoopPlayerController`** gained `ActivateShield()` (`BlueprintCallable` — thin wrapper, same
+  shape as `UCoopRoleSelectWidget::ClaimTank()`/etc. wrapping their RPCs, since Blueprint never
+  calls a raw `Server_*` RPC directly in this project) and `Server_ActivateShield()` (role-gates to
+  `EPlayerRole::Tank`, silent no-op otherwise — friends, not adversarial input, CLAUDE.md §8).
+  **`GameConstants.h`** gained `ShieldDurationSeconds` (5.0), `ShieldCooldownSeconds` (8.0),
+  `ShieldCoverageAngleDegrees` (90.0), `ShieldCoverageRadiusUnits` (300.0).
+  **Input Action asset, done ahead of the rebuild since it needs none of the new C++ symbols:**
+  duplicated `/Game/Input/Actions/IA_Jump` → `IA_Shield` (same shape: `ValueType=Boolean`,
+  `bConsumeInput=true`, `Pressed`+`Released` triggers). Added a new `E` key mapping for it to
+  `/Game/Input/IMC_Default`'s `DefaultKeyMappings` array via `set_properties` (read the full
+  existing 12-entry array first, appended one entry, wrote it back — confirmed all 12 original
+  entries survived unchanged plus the new one). `save_assets` on both.
+  **Real discovery, corrects the plan document's wording:** the plan file says "bound in
+  BP_PlayerController's existing BeginPlay input block," but reflection on the actual project
+  (`read_graph_dsl` on both Blueprints) shows `AddMappingContext` calls live in
+  `BP_PlayerController`'s `EventBeginPlay`, while the actual `EnhancedInputActionIA_*` event nodes
+  (Move/Look/Jump) live in **`BP_PlayerCharacter`'s EventGraph**, not the Controller's. Following
+  the real established pattern (not the plan's paraphrase of it) — `IA_Shield`'s event node will go
+  in `BP_PlayerCharacter` too, calling `Get Controller` → `Cast to CoopPlayerController` →
+  `ActivateShield`.
+  **Stopped here because this session's C++ changes require a full rebuild, not Live Coding.**
+  `ActiveStatusTags`/`ShieldCooldownEndServerTime` are new `UPROPERTY`s on the already-loaded
+  `ACoopCharacter`, and `ActivateShield`/`Server_ActivateShield` are new `UFUNCTION`s on the
+  already-loaded `ACoopPlayerController` — exactly the case DECISIONS.md's "Live Coding must not be
+  used to add a new UCLASS/UPROPERTY/UFUNCTION" entry warns crashed the editor once already this
+  build. Asked the user to close the editor and run a full external build (Visual Studio/Rider, or
+  `Build.bat`) rather than Ctrl+Alt+F11, then reopen the editor so `unreal-mcp` reconnects. Next,
+  once the editor is back up: confirm the new classes/functions load (`search_subclasses` for
+  `ActiveStatusTags`/no reflection errors), wire `IA_Shield`'s event node into `BP_PlayerCharacter`
+  via `create_node`/`connect_pins` (not `write_graph_dsl`, to avoid any risk of clobbering the
+  existing Move/Look/Jump wiring in that same graph), 5-client PIE reflection-verify tag application/
+  expiry/negation, then a human keypress + playtest pass for feel (per the plan's own note that
+  reflection can't prove an Input Action fires or feels right).
+
+- **M7 resumed after the rebuild: full rebuild confirmed clean, `IA_Shield` wired into
+  `BP_PlayerCharacter`, tag application and damage negation confirmed live. Expiry check
+  interrupted — pick up from there.** Full external rebuild succeeded (`CoopTankAbilities.cpp`,
+  `CoopCharacter.cpp`, `CoopHealthComponent.cpp`, `CoopPlayerController.cpp`, `GameConstants.cpp` all
+  compiled, `UnrealEditor-Unreal_first_Game.dll` linked, ~25s). Editor reopened, `unreal-mcp`
+  reconnected. `list_properties` on `BP_PlayerCharacter`'s CDO confirmed `activeStatusTags`
+  (`GameplayTagContainer`) and `statusTagExpiryServerTime` (`TMap`) both reflect correctly — no UHT
+  errors. `ActivateShield`/`Server_ActivateShield` confirmed present via `CoopPlayerController.h`
+  read (not reflectable themselves — RPCs aren't UPROPERTYs — but the header/source read confirms
+  the code exists and matches the plan).
+  **Wired `IA_Shield`'s event node into `BP_PlayerCharacter`'s `EventGraph`, via `create_node`/
+  `connect_pins` exactly as the prior session planned (not `write_graph_dsl`):** 5 new nodes —
+  `Input|EnhancedActionEvents|IA_Shield` (event), `Variables|Getareferencetoself` (note: this is the
+  *creatable* `type_id`; `get_node_type_pins`/`get_node_infos` report the same node's `type_id` back
+  as `Variables|Self-Reference` — the two strings refer to the same node class, just surfaced
+  differently depending which tool call you use), `Pawn|GetController`, `Utilities|Casting|
+  CastToCoopPlayerController`, `Abilities|ActivateShield`. Wired: `Self.self` → `GetController.self`;
+  `IA_Shield.Triggered` → `Cast.execute`; `GetController.ReturnValue` → `Cast.Object`; `Cast.then` →
+  `ActivateShield.execute`; `Cast.AsCoop Player Controller` → `ActivateShield.self`. `CastFailed` left
+  unconnected (silent no-op if `GetController()` ever returns non-`CoopPlayerController`, which
+  shouldn't happen in this project).
+  **Real tooling gotcha found, not a wiring bug:** `read_graph_dsl` renders the new event with an
+  empty body (`(event EnhancedInputActionIA_Shield (ActionValue ...))`, no nested calls) even though
+  the wiring is fully connected — the DSL reader apparently doesn't reconstruct a body that starts
+  from a non-default exec pin (`Triggered`, here) the way it does for the default/only exec pin on
+  simpler events. This is a read-side limitation of `read_graph_dsl`, not a real absence of wiring —
+  confirmed by cross-checking with `get_node_infos` on all 5 new nodes by their real `refPath`s
+  (not `get_node_type_pins`, which only ever creates/queries an ephemeral preview node and can't see
+  live graph state), which showed every connection above present and correct on the actual live
+  nodes. **Worth remembering for any future graph-verification work in this project: `read_graph_dsl`
+  is not reliable proof of absence for chains off a non-default exec pin — use `get_node_infos` on
+  the specific node refs instead.** `arrange_nodes` tidied the new node cluster's layout.
+  `compile_blueprint` came back clean (`LogBlueprint` showed only the "Compiling Blueprint" line, no
+  follow-up errors/warnings — same clean-compile signature as every prior milestone). `save_assets`.
+  **5-client PIE, tag application and damage negation confirmed live — genuinely exercised, not
+  code-review-only:** started PIE, confirmed 5 real `CoopPlayerState`s via `find_actors`. First
+  attempt: user pressed E on all 5 windows *before* the 30s `RoleSelect` auto-resolve had completed
+  (everyone still `Unassigned`), so nothing happened — correctly explained as expected behaviour
+  (`Server_ActivateShield` is role-gated to Tank; every player being `Unassigned` means every press
+  is a legitimate no-op), not a bug, and not what was being tested. Restarted PIE, waited out the
+  30s `RoleSelect` timeout properly this time, re-read all 5 roles (`Tank` landed on
+  `CoopPlayerState_3`/`PlayerId=264` this run — role auto-assignment is randomized per session, does
+  not repeat the same distribution as earlier milestones' logged runs).
+  **Real methodology problem hit and solved, not worked around by lowering rigor:** `ShieldDurationSeconds`
+  is only 5.0s — far too short a window to reliably catch via a human-mediated
+  AskUserQuestion round-trip (user has to read the question, alt-tab to the right PIE window,
+  press the key, alt-tab back, answer — routinely takes well over 5 real seconds). Rather than
+  accept an unreliable race, temporarily widened `ShieldDurationSeconds` to 180 on the live
+  `DA_GameConstants` asset (a sanctioned, reversible, already-designed-for-this tunable per
+  CLAUDE.md §10 — not a code change) via `ObjectTools.set_properties`, confirmed the Tank window
+  visually via its distinctive ability-card text ("Raise a barrier..."/"Break Mark a target...",
+  since role-to-window mapping isn't fixed and varies per session), had the user press E once, then
+  read `BP_PlayerCharacter_C_3`'s `activeStatusTags`/`statusTagExpiryServerTime` via reflection:
+  `Status.Shielded` present, expiry timestamp `533.88` (server time) — consistent with the widened
+  180s duration. **Damage negation confirmed via the same live pawn while shielded:** had the user
+  type `ApplyTestDamage 30` into the Tank window's own console (the RPC targets the calling
+  controller's own pawn, confirmed by reading `Server_ApplyTestDamage_Implementation`). Log line:
+  `ApplyTestDamage: BP_PlayerCharacter_C_3 took 30.0, now 100.0/100.0.` — health unchanged despite
+  "taking" 30 damage, confirming `UCoopHealthComponent::ApplyDamage`'s `Status.Shielded` early-out
+  negation actually fires against a live, ability-applied tag (not just a reflection-poked one).
+  Restored `ShieldDurationSeconds` back to 5.0 on `DA_GameConstants` afterward, confirmed via
+  `get_properties`, `save_assets`.
+  **Expiry check started but not completed — session ended here.** Set the duration back to the
+  real 5.0s value and asked the user to press E once more on the Tank window (cooldown from the
+  widened-duration test should have long since cleared by then) so expiry could be confirmed by
+  reading `activeStatusTags` again after a self-paced wait (not racing a human round-trip this time
+  — the plan was to capture the fresh application, then `sleep` past 5s myself before re-checking,
+  since `RemoveStatusTag` erases both the tag *and* its `StatusTagExpiryServerTime` entry on fire, so
+  post-expiry state alone can't distinguish "never fired" from "fired and expired" without bracketing
+  it with a fresh, timestamped application). User asked to stop for the day before that last press
+  was confirmed. `StopPIE` called, `DA_GameConstants` re-verified at `ShieldDurationSeconds=5.0`/
+  `ShieldCooldownSeconds=8.0` (unchanged from before this session) and saved to disk.
+  **Next session: resume the expiry check first (~2 minutes of work) before considering M7 done.**
+  Start PIE, wait for `RoleSelect` to auto-resolve (~30s), identify the Tank window via its
+  ability-card text, have the user press E once, immediately read that pawn's `activeStatusTags`/
+  `statusTagExpiryServerTime` to confirm the fresh application, then wait (self-paced, e.g. a 7-8s
+  `Bash` sleep — no need to involve the user again) and re-read the same properties to confirm
+  `Status.Shielded` is gone and the expiry map entry is gone too. Once that's clean, check off M7's
+  Verify box, `StopPIE`, and move to M8 (Control Stabilize + Fortress Synergy Conditional). Also
+  still open, deferred from M7's own log, not new: a human playtest pass for how Shield *feels*
+  (CLAUDE.md's own carve-out — reflection can confirm correctness but not feel).

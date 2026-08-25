@@ -77,4 +77,21 @@ public:
 	// negation (M7) and Downed's 0-HP trigger (M9) both build on this.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Health")
 	float DefaultMaxHealth = 100.0f;
+
+	// Build 1, M7: Tank Shield (CoopTankAbilities::ApplyShield). How long Status.Shielded persists
+	// once applied, and how long before Shield can be cast again.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Abilities")
+	float ShieldDurationSeconds = 5.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Abilities")
+	float ShieldCooldownSeconds = 8.0f;
+
+	// Forward-facing arc (full angle, degrees, centered on Tank's forward vector) and radius (cm)
+	// used to find which other actors count as "currently standing behind it" at the moment Shield
+	// is cast -- docs/abilities.md's Tank Shield entry.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Abilities")
+	float ShieldCoverageAngleDegrees = 90.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Abilities")
+	float ShieldCoverageRadiusUnits = 300.0f;
 };

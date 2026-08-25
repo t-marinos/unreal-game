@@ -1,8 +1,11 @@
 #include "Core/CoopCharacter.h"
 #include "Core/CoopHealthComponent.h"
 #include "GameFramework/PlayerState.h"
+#include "GameFramework/GameStateBase.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Net/UnrealNetwork.h"
+#include "TimerManager.h"
 
 ACoopCharacter::ACoopCharacter()
 {
@@ -34,6 +37,43 @@ void ACoopCharacter::PossessedBy(AController* NewController)
 	// ApplyPlayerColorTint sees the real PlayerId, not null.
 	Super::PossessedBy(NewController);
 	ApplyPlayerColorTint();
+}
+
+void ACoopCharacter::ApplyStatusTag(FGameplayTag Tag, float DurationSeconds)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	ActiveStatusTags.AddTag(Tag);
+
+	const AGameStateBase* GameState = GetWorld() ? GetWorld()->GetGameState() : nullptr;
+	const float Now = GameState ? GameState->GetServerWorldTimeSeconds() : 0.0f;
+	StatusTagExpiryServerTime.Add(Tag, Now + DurationSeconds);
+
+	// Reapplying before expiry refreshes the timer rather than stacking a second one.
+	FTimerHandle& Handle = StatusTagExpiryTimers.FindOrAdd(Tag);
+	FTimerDelegate Delegate = FTimerDelegate::CreateUObject(this, &ACoopCharacter::RemoveStatusTag, Tag);
+	GetWorldTimerManager().SetTimer(Handle, Delegate, DurationSeconds, false);
+}
+
+void ACoopCharacter::RemoveStatusTag(FGameplayTag Tag)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	ActiveStatusTags.RemoveTag(Tag);
+	StatusTagExpiryServerTime.Remove(Tag);
+	StatusTagExpiryTimers.Remove(Tag);
+}
+
+void ACoopCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(ACoopCharacter, ActiveStatusTags);
 }
 
 FLinearColor ACoopCharacter::GetColorForPlayerId(int32 PlayerId)
