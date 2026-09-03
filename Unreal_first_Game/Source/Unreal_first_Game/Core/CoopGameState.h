@@ -7,6 +7,12 @@
 
 class UGameConstants;
 
+// Build 1, M9. Fires after RequestSceneReset() finishes reviving every Downed character -- a future
+// scene class (Hold the Gate, M10) binds this to layer its own scene-specific reset (respawn
+// positions, reset plates/gates, restart timers) on top of the scene-agnostic part GameState itself
+// owns. Nothing binds to this yet in Build 1 since no scene class exists until M10.
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnSceneResetRequested);
+
 // Holds the one shared, replicated source of truth for "when did the match start" (CLAUDE.md §4.5:
 // all timing derives from server time, never client DeltaTime). Everything else (UI countdowns,
 // telegraph windows) should read GetElapsedMatchTime() rather than deriving its own clock.
@@ -52,6 +58,41 @@ public:
 	void StartPrepPhase(float DurationSeconds);
 	void StartHoldTheGatePhase();
 
+	// Build 1, M12: called by ACoopHoldTheGateScene::CompleteScene() (docs/scenes/HOLD_THE_GATE.md's
+	// "Success" condition). No scene exists yet to follow Complete in Build 1 -- this just records
+	// the phase so a future scene/UI has something to read.
+	void CompleteMatch();
+
+	// Build 1, M9. Server-authoritative tally of currently-Downed ACoopCharacters -- every
+	// UCoopDownedComponent increments/decrements this itself as its owner enters/leaves Downed, so
+	// GameState doesn't need to know about every ACoopCharacter individually. CLAUDE.md §6.6:
+	// "Wipe = all five DOWNED simultaneously."
+	UFUNCTION(BlueprintPure, Category = "Downed")
+	int32 GetDownedPlayerCount() const { return DownedPlayerCount; }
+
+	UFUNCTION(BlueprintPure, Category = "Downed")
+	bool IsPartyWiped() const { return DownedPlayerCount > 0 && DownedPlayerCount >= PlayerArray.Num(); }
+
+	// Server-only. Called by UCoopDownedComponent::SetDowned as each character enters/leaves Downed.
+	// IncrementDownedCount is also where CLAUDE.md §6.6's "Wipe = all five DOWNED simultaneously" is
+	// wired to RequestSceneReset() (Build 1, M12) -- this lives here rather than in a specific scene
+	// class because the wipe *condition* has been scene-agnostic GameState state since M9; only the
+	// "trigger a reset when it happens" wiring was missing until now.
+	void IncrementDownedCount();
+	void DecrementDownedCount();
+
+	// Build 1, M9. Scene-agnostic half of CLAUDE.md §6.6's "instant restart from the beginning of
+	// the current scene": clears every currently-Downed ACoopCharacter and restores full health. A
+	// future scene class (Hold the Gate, M10) calls this once its own wipe condition fires (a
+	// full-party Downed count, or the scene's own fail state), then layers its own scene-specific
+	// reset via OnSceneResetRequested -- nothing in Build 1 calls this yet since no scene class
+	// exists until M10; this milestone only builds the scene-agnostic mechanism it will use.
+	UFUNCTION(BlueprintCallable, Category = "Scene")
+	void RequestSceneReset();
+
+	UPROPERTY(BlueprintAssignable, Category = "Scene")
+	FOnSceneResetRequested OnSceneResetRequested;
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -86,6 +127,10 @@ private:
 
 	UPROPERTY(Replicated, VisibleAnywhere, Category = "Match")
 	float PrepPhaseEndServerTime = -1.0f;
+
+	// Build 1, M9: see GetDownedPlayerCount()/IsPartyWiped() above.
+	UPROPERTY(Replicated, VisibleAnywhere, Category = "Downed")
+	int32 DownedPlayerCount = 0;
 
 	// Every tunable lives in DA_GameConstants per CLAUDE.md §10. This class has no Blueprint
 	// wrapper of its own to hold this reference the way BP_GameMode/BP_PlayerController do -- see

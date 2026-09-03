@@ -5,8 +5,10 @@
 #include "Dev/DummyAIController.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerStart.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
+#include "EngineUtils.h"
 
 ACoopGameMode::ACoopGameMode()
 {
@@ -106,8 +108,18 @@ void ACoopGameMode::FillEmptySlotsWithDummies()
 	const int32 CurrentPlayers = GameState ? GameState->PlayerArray.Num() : 0;
 	const int32 DummiesToSpawn = FMath::Max(0, MaxPlayers - CurrentPlayers);
 
-	const AActor* SpawnPoint = FindPlayerStart(nullptr);
-	const FTransform SpawnTransform = SpawnPoint ? SpawnPoint->GetActorTransform() : FTransform::Identity;
+	// Every dummy used to spawn at the exact same FindPlayerStart(nullptr) point and rely on
+	// AdjustIfPossibleButAlwaysSpawn to nudge overlapping ones apart -- with several capsules
+	// piling up at one spot, that nudge could leave one boxed in by the others with nowhere to
+	// go. Spawning each dummy at its own PlayerStart (the level now has one per player slot,
+	// laid out in a line) avoids the pileup entirely. Sorted by X so index order matches their
+	// left-to-right placement, not spawn order.
+	TArray<APlayerStart*> PlayerStarts;
+	for (TActorIterator<APlayerStart> It(GetWorld()); It; ++It)
+	{
+		PlayerStarts.Add(*It);
+	}
+	PlayerStarts.Sort([](const APlayerStart& A, const APlayerStart& B) { return A.GetActorLocation().X < B.GetActorLocation().X; });
 
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
@@ -115,6 +127,9 @@ void ACoopGameMode::FillEmptySlotsWithDummies()
 	int32 SpawnedCount = 0;
 	for (int32 Index = 0; Index < DummiesToSpawn; ++Index)
 	{
+		const FTransform SpawnTransform = PlayerStarts.Num() > 0
+			? PlayerStarts[Index % PlayerStarts.Num()]->GetActorTransform()
+			: FTransform::Identity;
 		APawn* DummyPawn = GetWorld()->SpawnActor<APawn>(DefaultPawnClass, SpawnTransform, SpawnParams);
 		ADummyAIController* DummyController = GetWorld()->SpawnActor<ADummyAIController>();
 		if (DummyPawn && DummyController)

@@ -78,6 +78,27 @@ void UCoopHealthComponent::ApplyDamage(float DamageAmount)
 	}
 }
 
+void UCoopHealthComponent::Revive(float HealthPercent)
+{
+	if (!GetOwner() || !GetOwner()->HasAuthority())
+	{
+		return;
+	}
+
+	CurrentHealth = FMath::Clamp(MaxHealth * HealthPercent, 0.0f, MaxHealth);
+}
+
+void UCoopHealthComponent::SetMaxHealth(float NewMaxHealth)
+{
+	if (!GetOwner() || !GetOwner()->HasAuthority())
+	{
+		return;
+	}
+
+	MaxHealth = NewMaxHealth;
+	CurrentHealth = NewMaxHealth;
+}
+
 void UCoopHealthComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);

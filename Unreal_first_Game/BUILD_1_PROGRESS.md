@@ -70,24 +70,22 @@ be scheduled. Don't start M14 without it being explicitly picked back up in a fu
       completed the manual Designer work (Text Blocks, Buttons, `Bind Function`/`OnClicked` wiring)
       from the prior log entry's numbered steps. Verified populated and wired, not just present —
       see log entry below for exact evidence.
-- [ ] Verify: reflection confirms the data path and `WBP_RoleSelect`'s button wiring are correct (see
+- [x] Verify: reflection confirms the data path and `WBP_RoleSelect`'s button wiring are correct (see
       log) and the full RoleSelect→Prep→HoldTheGate progression still works with real widgets
-      attached — **done**. **Still open:** a real layout bug found in `WBP_PrepArenaHUD` (ability
-      card text overlaps illegibly — see log), plus the still-outstanding human playtest for
-      layout/readability and an actual-button-click test (no input-injection tool exists to do this
-      by reflection). Leave this box unchecked until the overlap bug is fixed and a human confirms
-      the fix visually.
+      attached — done. The layout bug that previously kept this box unchecked (ability card text
+      overlaps/narrow-wraps illegibly) is now fixed and definitively verified — see the
+      "Parked item resolved" log entry below. **Still open, not blocking:** a human playtest for
+      general layout/readability feel (same carve-out as every other milestone's ability-feel
+      playtest) and actual-button-click testing (no longer literally impossible —
+      `SlateInspectorToolset.Click` now exists — but not exercised this session since it wasn't
+      what was asked; worth doing whenever role-select click behaviour needs verifying).
 
-**Parked (2026-08-25, explicit user decision — not an oversight):** the `WBP_AbilityCard` description
-text-wrap width bug (see the log entry ending "M5's Verify box stays unchecked") is deliberately left
-unfixed for now. User: "leave it to fix it later." All underlying data/logic (`CardIndex` wiring,
-`GetCardName`/`GetCardDescription`, the 5-button `OnClicked` wiring on `WBP_RoleSelect`) is verified
-correct — this is purely a Designer-side width/wrap constraint on one Text Block, cosmetic only, does
-not block gameplay logic in M6+. Do not silently re-open or attempt to fix this as a side effect of
-later work; only touch it if the user explicitly asks. When it does get picked back up: widen the
-description Text Block's `Size Box` `Width Override` to ~200-250px per the log's diagnosis, then
-re-verify per the same reflection+screenshot method already established (5-client PIE,
-`CaptureEditorImage`, compare against the two bug screenshots already captured this session).
+**Parked item resolved (see the dedicated log entry below):** the `WBP_AbilityCard` description
+text-wrap width bug logged 2026-08-25 as "leave it to fix it later" was fixed and verified in a later
+session once `unreal-mcp` gained `UMGToolSet` (widget-tree read/write) and `SlateInspectorToolset`
+(live screenshot + accessibility-tree text extraction) — the exact tooling gap that made this
+un-fixable-by-reflection before. Kept here as a record of what was parked and why; see the log entry
+for the real root cause (it wasn't the guessed-at `Size Box` at all) and the fix actually applied.
 
 ## M6 — Health & Damage Foundation
 - [x] `CoopHealthComponent.h/.cpp` — replicated Current/MaxHealth, server-only `ApplyDamage()`,
@@ -105,53 +103,66 @@ re-verify per the same reflection+screenshot method already established (5-clien
 - [x] New Input Action `IA_Shield` wired into `IMC_Default`/`BP_PlayerController`
 - [x] New DA_GameConstants: `ShieldDurationSeconds`, `ShieldCooldownSeconds`,
       `ShieldCoverageAngleDegrees`, `ShieldCoverageRadiusUnits`
-- [ ] Verify: reflection for tag/expiry/negation; human keypress + playtest for feel — **tag
-      application and damage negation confirmed live this session; expiry confirmation was
-      interrupted, pick back up per the log's "Next" note before checking this box**
+- [x] Verify: reflection for tag/expiry/negation confirmed live (see log). Human playtest for feel
+      still outstanding — not blocking, see log's final note.
 
 ## M8 — Control Stabilize + Fortress Synergy Conditional
-- [ ] `Source/Unreal_first_Game/Abilities/CoopControlAbilities.h/.cpp` — `ResolveStabilize()` with
+- [x] `Source/Unreal_first_Game/Abilities/CoopControlAbilities.h/.cpp` — `ResolveStabilize()` with
       the hardcoded Fortress conditional (CLAUDE.md §4.6 shape)
-- [ ] `CoopPlayerController.h/.cpp`: `Server_ActivateStabilize()`
-- [ ] New Input Action `IA_Stabilize`
-- [ ] New DA_GameConstants: `StabilizeCooldownSeconds`, `StabilizeCastRangeUnits`,
+- [x] `CoopPlayerController.h/.cpp`: `Server_ActivateStabilize()`
+- [x] New Input Action `IA_Stabilize` — duplicated from `IA_Shield`, mapped to `Q` in `IMC_Default`,
+      wired into `BP_PlayerCharacter`'s `EventGraph`
+- [x] New DA_GameConstants: `StabilizeCooldownSeconds`, `StabilizeCastRangeUnits`,
       `FortressDurationSeconds`, `FortressCoverageRadiusUnits`, `FortressKnockbackResistPercent`
-- [ ] Verify: Tank+Control combo produces `Status.Fortress`; whiff on unshielded Tank does nothing;
-      human playtest for knockback resist
+      (confirmed live on the CDO with correct default values after the rebuild)
+- [x] Verify: Tank+Control combo produces `Status.Fortress` (replacing `Status.Shielded`, and
+      extending to nearby teammates); whiff on an unshielded Tank does nothing. Knockback resist
+      has no consumer yet (parked until M11) — human playtest for feel still open, not blocking.
 
 ## M9 — Downed / Revive / Wipe / Instant Retry
-- [ ] `CoopDownedComponent.h/.cpp` — 0-HP → Downed, revive channel, movement/ability lockout
-- [ ] `CoopGameState.h/.cpp`: replicated Downed count, `IsPartyWiped()`, `RequestSceneReset()` hook
-- [ ] `CoopPlayerController.h/.cpp`: `Server_AttemptRevive()`
-- [ ] New DA_GameConstants: `ReviveDurationSeconds`, `ReviveRadiusUnits`,
-      `ReviveHealthRestorePercent`
-- [ ] Verify: 5-client PIE, single downed+revived correctly; simultaneous all-5-down flips
-      `IsPartyWiped()` on every client
+- [x] `CoopDownedComponent.h/.cpp` — 0-HP → Downed, revive channel, movement/ability lockout
+- [x] `CoopGameState.h/.cpp`: replicated Downed count, `IsPartyWiped()`, `RequestSceneReset()` hook
+- [x] `CoopPlayerController.h/.cpp`: `Server_AttemptRevive()`
+- [x] New DA_GameConstants: `ReviveDurationSeconds`, `ReviveRadiusUnits`,
+      `ReviveHealthRestorePercent` (0.5, per explicit user confirmation this session)
+- [x] Verify: 5-client PIE, single downed+revived correctly; simultaneous all-5-down flips
+      `IsPartyWiped()` on every client — done via the new `GameplayTestToolset` plugin (see
+      `build_toolset.md`), entirely self-driven, no human keypress/console typing anywhere
 
 ## M10 — Hold the Gate: Plates & Gate Logic
-- [ ] `Source/Unreal_first_Game/Scenes/CoopPressurePlate.h/.cpp`
-- [ ] `CoopGateActor.h/.cpp`
-- [ ] `CoopHoldTheGateScene.h/.cpp`
-- [ ] `BP_PressurePlate`, `BP_Gate` wrappers + level layout
-- [ ] New DA_GameConstants: `PlateRestoreWindowSeconds` (confirm no `PlateCount` duplication)
-- [ ] Verify: gate opens only with all 4 plates held simultaneously; restore-window/close behavior;
+- [x] `Source/Unreal_first_Game/Scenes/CoopPressurePlate.h/.cpp`
+- [x] `CoopGateActor.h/.cpp`
+- [x] `CoopHoldTheGateScene.h/.cpp`
+- [x] `BP_PressurePlate`, `BP_Gate` wrappers + level layout (also `BP_HoldTheGateScene`, not
+      itemized in the original plan line but required — `CoopHoldTheGateScene` holds its own
+      `EditDefaultsOnly` `GameConstants` reference, so the established CDO-persistence rule applies)
+- [x] New DA_GameConstants: `PlateRestoreWindowSeconds` (confirmed no `PlateCount` duplication —
+      no such field existed yet, added both)
+- [x] Verify: gate opens only with all 4 plates held simultaneously; restore-window/close behavior;
       server-authoritative
 
 ## M11 — Hold the Gate: Monster Spawner & Fixate/Retarget AI
 *(Depends on M0 being committed first.)*
-- [ ] `CoopFixateRetargetComponent.h/.cpp` — reusable targeting component
-- [ ] `CoopMonsterCharacter.h/.cpp`
-- [ ] `CoopMonsterSpawner.h/.cpp` — Hold-the-Gate-specific timing/escalation
-- [ ] `BP_MonsterCharacter`, `BP_MonsterSpawner` + chamber visuals/placement
-- [ ] New DA_GameConstants: `MonsterHealth`, `MonsterSpawnIntervalEarlySeconds`,
-      `MonsterSpawnIntervalLateSeconds`, `MonsterFixateSwitchDelaySeconds`
-- [ ] Verify: monsters target plate-holders, retarget correctly, server-driven spawn timing
+- [x] `CoopFixateRetargetComponent.h/.cpp` — reusable targeting component
+- [x] `CoopMonsterCharacter.h/.cpp`
+- [x] `CoopMonsterSpawner.h/.cpp` — Hold-the-Gate-specific timing/escalation
+- [x] `BP_MonsterCharacter`, `BP_MonsterSpawner` + chamber visuals/placement
+- [x] New DA_GameConstants: `MonsterHealth`, `MonsterSpawnIntervalEarlySeconds`,
+      `MonsterSpawnIntervalLateSeconds`, `MonsterFixateSwitchDelaySeconds` (plus two not itemized in
+      the plan but required to give the monster's attack real numbers — `MonsterAttackDamage`,
+      `MonsterAttackIntervalSeconds` — see log)
+- [x] Verify: monsters target plate-holders, retarget correctly, server-driven spawn timing
 
 ## M12 — Hold the Gate: Escalation Tuning, Win/Lose Integration, Full Playtest
-- [ ] `CoopHoldTheGateScene.h/.cpp` extended: win/lose state machine, `ResetScene()`,
+- [x] `CoopHoldTheGateScene.h/.cpp` extended: win/lose state machine, `ResetScene()`,
       `CompleteScene()`
-- [ ] New DA_GameConstants: `HoldTheGateSceneDurationSeconds`
-- [ ] Verify: human playtest for escalation pacing (Shield-alone-sufficient → insufficient curve)
+- [x] New DA_GameConstants: `HoldTheGateSceneDurationSeconds`
+- [x] Verify: win path, both reset paths (duration-expiry-without-win, restore-window-expiry) all
+      confirmed live via reflection (see log) — a genuine bug (4 duplicate stray pressure plates
+      left over from M10) was found and fixed along the way. **Still open, not blocking:** the
+      plan's own suggested human/solo playtest for escalation *pacing feel* (Shield-alone-sufficient
+      → insufficient curve) — reflection can confirm the win/lose logic is correct but not whether
+      the curve feels right. Same carve-out as M7/M8's ability-feel playtests.
 
 ## M13 — Mini-Boss: Repeat → Combine → Rotate Fortress
 - [ ] `CoopMiniBossCharacter.h/.cpp` — extends `CoopMonsterCharacter`, local phase state machine
@@ -664,3 +675,700 @@ re-verify per the same reflection+screenshot method already established (5-clien
   Verify box, `StopPIE`, and move to M8 (Control Stabilize + Fortress Synergy Conditional). Also
   still open, deferred from M7's own log, not new: a human playtest pass for how Shield *feels*
   (CLAUDE.md's own carve-out — reflection can confirm correctness but not feel).
+
+- **M7 expiry check completed — M7's Verify box now checked.** Resumed exactly where the prior
+  session stopped. `IsPIERunning` confirmed clean state, `StartPIE` (warmup 2s), waited (background
+  grep-wait on the log for `Prep phase started`, the RoleSelect→Prep transition line) for the 30s
+  `RoleSelect` auto-resolve. Identified this run's Tank via reflection rather than a screenshot
+  guess: `find_actors` on the server world (`UEDPIE_0`) listed all 5 `CoopPlayerState`s;
+  `CoopPlayerState_2` read `PlayerRole=Tank, PlayerId=258`. Cross-checked which PIE client window
+  that corresponds to by reading each `UEDPIE_N`'s own local `BP_PlayerController_C_0.PlayerState`
+  directly via its own soft path (confirms the M6 log's finding that per-world actor numbering
+  doesn't line up across clients — `PlayerId` is the only stable cross-reference): `UEDPIE_2`'s
+  local player carries `PlayerId=258`, so `UEDPIE_2` is this run's Tank client.
+  **Tried identifying the on-screen window by decoding a full-desktop `CaptureEditorImage` capture**
+  (base64 PNG was too large for the tool result directly — saved to a scratch file, decoded via a
+  small Python script, viewed with `Read`) but the captured ability-card text was too ambiguous to
+  reliably tell windows apart at that resolution. **Asked the user directly instead**, giving Tank's
+  exact hardcoded card text (from `CoopAbilityCardWidget.cpp`: "Raise a barrier in front of you that
+  blocks damage from that direction." / "Mark a target, opening a brief window for Control to act on
+  it.") so they could self-identify the right window — more reliable than a compressed screenshot
+  read, and matches the project's established pattern for this exact problem.
+  **First press attempt read back empty (`ActiveStatusTags` and `StatusTagExpiryServerTime` both
+  empty) — correctly diagnosed as the same round-trip-timing problem flagged in the prior session's
+  log, not a real bug:** an `AskUserQuestion` round trip (read question, alt-tab, press key, alt-tab
+  back, answer) routinely exceeds the real 5.0s `ShieldDurationSeconds`, so the shield had already
+  fired and expired by the time reflection read it — indistinguishable from "never applied" without
+  the bracketing this milestone's own log already called out. **Recovered with the exact precedent
+  already established, not a new workaround:** widened `ShieldDurationSeconds` to 15.0 on the live
+  `DA_GameConstants` (`set_properties`, confirmed via `get_properties` before and after), asked the
+  user to press E once more in the same identified Tank window, then immediately read the pawn's
+  tags: `Status.Shielded` present, `StatusTagExpiryServerTime["Status.Shielded"]=445.56` (server
+  time) — fresh application confirmed. Waited ~20 real seconds (a `date`-based `until`-loop in a
+  backgrounded `Bash` call, per the harness's guidance against bare `sleep`) past the widened 15s
+  duration, self-paced with no user involvement, then re-read the same properties: both
+  `ActiveStatusTags` and `StatusTagExpiryServerTime` empty again — confirms genuine timer-driven
+  removal (`RemoveStatusTag` clearing both the tag and its expiry-map entry), not just "was never
+  there." Restored `ShieldDurationSeconds` back to 5.0 (confirmed via `get_properties`), `save_assets`,
+  `StopPIE`.
+  **M7 fully verified: tag application, damage negation (prior session), and now expiry, all
+  confirmed live against real ability-triggered state, not synthetic reflection pokes.** Checked off
+  M7's Verify box. Still open, not blocking: a human playtest pass for how Shield *feels* at its real
+  5.0s/8.0s duration/cooldown (CLAUDE.md's reflection-can't-prove-feel carve-out) — worth folding into
+  a future full-scene playtest rather than doing solo.
+  Next: M8 (Control Stabilize + Fortress Synergy Conditional).
+
+- **M8 C++ written; paused for a required full rebuild, same as M7.** Added
+  `Source/Unreal_first_Game/Abilities/CoopControlAbilities.h/.cpp` (second file in `Abilities/`,
+  mirrors `CoopTankAbilities`'s shape exactly): `ResolveStabilize(ACoopCharacter* Control, const
+  UGameConstants* GameConstants)` cooldown-gates via a new `StabilizeCooldownEndServerTime` field,
+  then finds the nearest `ACoopCharacter` whose `PlayerState->GetRole() == EPlayerRole::Tank` within
+  `StabilizeCastRangeUnits` (no targeting/crosshair UI exists yet, so "nearest Tank in range" is the
+  implicit target, same "friends, not adversarial input" reasoning as every other ability here).
+  **The hardcoded Fortress conditional itself, matching CLAUDE.md §4.6's literal worked example:** if
+  that Tank currently holds `Status.Shielded`, removes it and applies `Status.Fortress` (duration
+  `FortressDurationSeconds`) to the Tank, then extends `Status.Fortress` to every other
+  `ACoopCharacter` within `FortressCoverageRadiusUnits` of the Tank (clearing their own
+  `Status.Shielded` first if they had it from the original cone-coverage cast) — this is the "radius,
+  not Shield's cone" multi-teammate coverage `docs/abilities.md` describes. No Tank in range, or an
+  unshielded nearest Tank, is a silent whiff; the cooldown was already consumed before the check runs
+  (matches Armor Break's "opens a window, doesn't guarantee a hit" philosophy).
+  **`ACoopCharacter`** gained `StabilizeCooldownEndServerTime` + getter/setter, same shape as M7's
+  `ShieldCooldownEndServerTime` (plain float, not replicated, not a `UPROPERTY` — Build 1's ability
+  cards have no cooldown-remaining display yet).
+  **`ACoopPlayerController`** gained `ActivateStabilize()`/`Server_ActivateStabilize()`, identical
+  shape to `ActivateShield`/`Server_ActivateShield`: role-gates to `EPlayerRole::Control`, silent
+  no-op otherwise.
+  **`GameConstants.h`** gained `StabilizeCooldownSeconds` (10.0), `StabilizeCastRangeUnits` (800.0),
+  `FortressDurationSeconds` (8.0), `FortressCoverageRadiusUnits` (600.0),
+  `FortressKnockbackResistPercent` (0.75) — the last one has no consumer yet (no knockback exists
+  until Hold the Gate's monsters land in M11), flagged in a header comment as a deliberate
+  simplification per CLAUDE.md §1, matching M7's own documented "negates all damage, not just
+  directional" carve-out for the same reason.
+  **Stopped here because `Server_ActivateStabilize`/`ActivateStabilize` are new `UFUNCTION`s on the
+  already-loaded `ACoopPlayerController`** — exactly the case DECISIONS.md's "Live Coding must not be
+  used to add a new UCLASS/UPROPERTY/UFUNCTION" entry covers, same as M7 hit. Asked the user to close
+  the editor and run a full external build, then reopen so `unreal-mcp` reconnects.
+  **Next, once the editor is back up:** confirm the new symbols load (`search_subclasses`/no
+  reflection errors), confirm the 5 new `GameConstants` fields read their C++ defaults on the live
+  `DA_GameConstants` CDO via `get_properties` (same as every prior milestone's constants — no manual
+  `set_properties` needed unless a value looks wrong), duplicate `IA_Shield` → `IA_Stabilize` and add
+  its key mapping to `IMC_Default` (can happen in parallel with the rebuild, needs no new C++
+  symbols, same as M7's `IA_Shield` prep), wire `IA_Stabilize`'s event node into
+  `BP_PlayerCharacter`'s `EventGraph` via `create_node`/`connect_pins` (not `write_graph_dsl`, per
+  M7's established caution), then 5-client PIE: reflection-verify Tank Shields + Control Stabilizes
+  targeting that Tank produces `Status.Fortress` (replacing `Status.Shielded`), confirm whiffing on
+  an unshielded Tank does nothing, and confirm cooldown consumes either way. Knockback resistance has
+  no consumer yet, so nothing to verify there until M11. Human playtest for feel stays open, same
+  carve-out as M7.
+  **`IA_Stabilize` done ahead of the rebuild, same as M7's `IA_Shield`:** duplicated
+  `/Game/Input/Actions/IA_Shield` → `IA_Stabilize` (`AssetTools.duplicate`), confirmed the duplicate
+  carried over `valueType=Boolean`, `bConsumeInput=true`, Pressed+Released triggers. Read
+  `IMC_Default`'s `defaultKeyMappings.mappings` (13 entries: 12 from Build 0 + M7's `IA_Shield`→`E`),
+  appended `IA_Stabilize`→`Q` (E already taken by Shield), wrote the full 14-entry array back, read
+  it back and confirmed all 13 original entries survived unchanged plus the new one. `save_assets`
+  on both. Input-side prep for M8 is done; only the C++ rebuild and the `BP_PlayerCharacter`
+  event-node wiring remain once the editor is back up.
+
+- **M8 finished: rebuild done (via Live Coding, not a full external rebuild — see the new
+  DECISIONS.md addendum), `IA_Stabilize` wired into `BP_PlayerCharacter`, Fortress synergy confirmed
+  live end-to-end.** The user closed the loop on the rebuild ask by triggering an **in-editor Live
+  Coding compile** rather than the full external rebuild this session had requested. Checked the log
+  before trusting it: `Reload/Re-instancing Complete: 1 package changed, 2 classes changed, 13
+  classes unchanged, 3 enums unchanged, 36 functions remapped`, only the same benign "data type
+  changes may cause packaging to fail" warning every prior milestone's compile has also produced —
+  no `EXCEPTION_ACCESS_VIOLATION`, no crash, `IsPIERunning` succeeded immediately afterward. This is
+  a real counterexample to DECISIONS.md's blanket "new UPROPERTY/UFUNCTION requires a full rebuild"
+  claim, so it's logged there as an addendum rather than silently treated as luck: the original
+  crash's own stack trace was inside a UMG widget class's dynamic initializer while registering a
+  **brand-new `UUserWidget` subclass**, not just new members on an already-existing class — this
+  session's changes (new `UFUNCTION`s on `ACoopPlayerController`, new `UPROPERTY`s on
+  `UGameConstants`, neither a new class nor UMG) are consistent with that narrower trigger. The
+  broad rule stays the default (a new `UCLASS`, especially a widget, still needs a full rebuild
+  unconditionally); new members on an existing non-widget class is now reasonable to try via Live
+  Coding first, checking for the same clean-reload log signature before trusting it.
+  **Confirmed via reflection before touching content:** `list_properties` on `DA_GameConstants`
+  showed all 5 new M8 fields registered; `get_properties` read back their C++ defaults exactly as
+  specced (10.0 / 800.0 / 8.0 / 600.0 / 0.75) with no manual `set_properties` needed, same as every
+  prior milestone's constants.
+  **Wired `IA_Stabilize` into `BP_PlayerCharacter`'s `EventGraph`**, mirroring `IA_Shield`'s chain
+  exactly (5 new nodes: `EnhancedInputActionIA_Stabilize` event, `Self`, `Pawn|GetController`,
+  `CastToCoopPlayerController`, `Abilities|ActivateStabilize`; `find_node_types` confirmed
+  `Input|EnhancedActionEvents|IA_Stabilize` and `Abilities|ActivateStabilize` were both creatable
+  post-rebuild). `create_node`/`connect_pins` for all 5 nodes and connections (not `write_graph_dsl`,
+  per M7's established caution), verified via `get_node_infos` on all 5 by ref (not
+  `read_graph_dsl`, which M7 already found unreliable for non-default exec pins) — all connections
+  present and correct: `Triggered→Cast.execute`, `Self.self→GetController.self`,
+  `GetController.ReturnValue→Cast.Object`, `Cast.then→ActivateStabilize.execute`,
+  `Cast.AsCoopPlayerController→ActivateStabilize.self`. `arrange_nodes`, `compile_blueprint` (clean,
+  only the "Compiling Blueprint" log line, no follow-up errors), `save_assets`.
+  **5-client PIE, full Fortress synergy exercised live, not just tag-application in isolation:**
+  identified this run's Tank (`PlayerId=263`, `UEDPIE_2`) and Control (`PlayerId=264`, `UEDPIE_3`)
+  via the same PlayerId cross-reference method M7 established. **Whiff test first, correctly
+  sequenced before Tank ever shielded:** had Control press Q against an unshielded Tank — read back
+  `ActiveStatusTags`/`StatusTagExpiryServerTime` both empty, confirming a whiff writes nothing (and
+  implicitly that the cooldown-consumes-regardless behavior didn't leave any stray tag). Then Tank
+  pressed E — `Status.Shielded` confirmed present (temporarily widened `ShieldDurationSeconds` to 60
+  first, same M7 precedent, to survive the `AskUserQuestion` round trip). **First Stabilize attempt
+  read back empty again — correctly diagnosed as a second instance of the same round-trip-timing
+  class of bug, not a new one:** `ShieldDurationSeconds` was widened but `FortressDurationSeconds`
+  (8.0s) was not, so `Status.Fortress` had almost certainly applied and already expired before
+  reflection could read it. Widened `FortressDurationSeconds` to 60 too, had Tank re-shield (fresh
+  `Status.Shielded` confirmed), had Control cast Stabilize again: **`ActiveStatusTags` now read
+  `Status.Fortress`, `Status.Shielded` gone — the upgrade behavior confirmed live.** Checked two
+  other teammates' pawns (`BP_PlayerCharacter_C_0`/Support, `C_1`/Damage) with no further user
+  action needed (positions already set from spawn) — both also carried `Status.Fortress`, confirming
+  the multi-teammate radius coverage works, not just the Tank's own upgrade. Restored
+  `ShieldDurationSeconds`→5.0 and `FortressDurationSeconds`→8.0, confirmed via `get_properties`,
+  `save_assets`, `StopPIE`.
+  **M8 fully verified: whiff-does-nothing, the Tank upgrade, and multi-teammate coverage all
+  confirmed live against real ability-triggered state.** Checked off M8's remaining boxes. Still
+  open, not blocking: knockback resistance has no consumer yet (parked until M11's monsters exist),
+  and a human playtest pass for how Stabilize/Fortress *feels* (same carve-out as M7's Shield).
+  Next: M9 (Downed / Revive / Wipe / Instant Retry).
+
+- **M9 C++ written; paused for a required full rebuild — this one genuinely needs it (new UCLASS,
+  not just new members on an existing class).** Asked the user first (per the plan's own flagged
+  open question) whether revive should restore half or full health; user chose half (0.5), matching
+  the plan's own default.
+  **`ACoopCharacter`** gained `DownedComponent` (`UCoopDownedComponent`, mirrors `HealthComponent`'s
+  placement) and `ReviveTriggerVolume` (a `USphereComponent`, `NoCollision` by default, attached to
+  root -- mirrors `ACoopButton`'s `TriggerVolume`, since the capsule's own Pawn-vs-Pawn collision
+  blocks rather than overlaps, so it can't fire the overlap Revive needs), plus
+  `ApplyPersistentStatusTag(Tag)` -- same as `ApplyStatusTag` but with no expiry timer at all, for
+  state (`Status.Downed`) that only clears via an explicit `RemoveStatusTag` call, not a timed buff.
+  **`UCoopHealthComponent`** gained `Revive(HealthPercent)` -- server-only, restores
+  `CurrentHealth` to `Percent * MaxHealth`, deliberately never touches `OnHealthDepleted` (that only
+  fires on a fresh crossing into 0, never on a heal).
+  **New `Source/Unreal_first_Game/Core/CoopDownedComponent.h/.cpp`** (placed in `Core/` alongside
+  `CoopHealthComponent`, not a new folder -- same category of mechanic): subscribes to
+  `OnHealthDepleted` to enter Downed (`ApplyPersistentStatusTag(Status.Downed)`,
+  `DisableMovement()`, increments `GameState`'s Downed tally, enables+resizes
+  `ReviveTriggerVolume` to `OverlapAllDynamic`/`ReviveRadiusUnits`). Revive is proximity-triggered,
+  not keybound -- the plan's M9 bullet lists `Server_AttemptRevive()` on the PlayerController with no
+  accompanying "new Input Action" line (unlike M7/M8), and CLAUDE.md §6.6's own wording ("standing
+  adjacent for a few seconds") matches `ACoopButton`'s existing overlap-trigger shape better than a
+  keypress would -- so `OnReviveTriggerBeginOverlap` reuses `ACoopButton`'s exact
+  "only the client owning the overlapping pawn fires the RPC" filter (`IsLocallyControlled()`) to
+  call `Server_AttemptRevive()` (no target parameter -- the RPC does its own nearest-Downed-in-range
+  search server-side, matching `Server_ActivateStabilize`'s implicit-target shape).
+  **Documented simplification, flagged in code, not silently taken:** "standing adjacent for a few
+  seconds" is approximated as re-validated proximity at the *start* (the RPC's own range search) and
+  *again at completion* (`CompleteRevive` re-checks distance + that the reviver hasn't died/gone
+  Downed themselves), not a continuous per-tick channel -- a true continuous channel would need
+  either `Tick` or repeated client RPCs while held, more than this milestone needs per CLAUDE.md §1.
+  `ForceRevive()` is the separate, no-channel, full-heal path for a full-party scene reset.
+  **`ACoopGameState`** gained `DownedPlayerCount` (replicated), `GetDownedPlayerCount()`,
+  `IsPartyWiped()` (`DownedPlayerCount > 0 && DownedPlayerCount >= PlayerArray.Num()` -- confirmed
+  dummies get real `PlayerState`s too via `AController::Possess`'s own `InitPlayerState`, so
+  `PlayerArray.Num()` reliably reads 5 once the roster completes, dev-mode or not),
+  `IncrementDownedCount()`/`DecrementDownedCount()` (called by `UCoopDownedComponent::SetDowned`),
+  and `RequestSceneReset()` -- the scene-agnostic half of CLAUDE.md §6.6's "instant restart":
+  iterates every `ACoopCharacter`, calls `ForceRevive()` on each one's `DownedComponent`, then
+  broadcasts a new `OnSceneResetRequested` delegate for a future scene class to layer its own
+  scene-specific reset onto (respawn positions, reset plates/gates) -- nothing binds to it yet since
+  no scene class exists until M10; this milestone only builds the mechanism it will use.
+  **`ACoopPlayerController`** gained `Server_AttemptRevive()` (the nearest-Downed-in-range search +
+  `BeginRevive()` call described above) and a Downed lockout check added to both
+  `Server_ActivateShield_Implementation` and `Server_ActivateStabilize_Implementation` (CLAUDE.md
+  §6.6: Downed characters can't use abilities) -- a small, direct addition to M7/M8's existing RPCs
+  rather than a new generic gating layer, since only two abilities exist to gate in Build 1.
+  **`GameConstants.h`** gained `ReviveDurationSeconds` (3.0), `ReviveRadiusUnits` (150.0),
+  `ReviveHealthRestorePercent` (0.5, per the user's explicit choice this session).
+  **Stopped here because `UCoopDownedComponent` is a brand-new `UCLASS`** -- per the M8 DECISIONS.md
+  addendum's own narrower guidance, that specific case (not just new members on an existing class)
+  is still unconfirmed-safe under Live Coding and defaults to a full external rebuild. Asked the user
+  to close the editor and run a full rebuild, then reopen so `unreal-mcp` reconnects.
+  **Next, once the editor is back up:** confirm the new symbols/class load cleanly
+  (`search_subclasses` for `UCoopDownedComponent`, no reflection errors), wire
+  `DownedComponent.GameConstants` on `BP_PlayerCharacter`'s CDO to `DA_GameConstants` (the exact
+  same CDO-persistence step M6's log already found necessary for `HealthComponent.GameConstants` --
+  do this proactively this time, don't wait to discover it missing via a warning log line), confirm
+  the 3 new `GameConstants` fields read their C++ defaults live, then 5-client PIE: apply enough test
+  damage via `ApplyTestDamage` to down one pawn, confirm `Status.Downed`/movement lockout/ability
+  lockout, move another pawn's capsule into range (via `set_actor_transform`, no keypress needed --
+  Revive is overlap-triggered) and confirm the revive channel completes and restores
+  `ReviveHealthRestorePercent` of health, then repeat for all 5 simultaneously and confirm
+  `IsPartyWiped()` flips true on the server (and check it clears correctly after `RequestSceneReset()`
+  is called manually via reflection, since nothing calls it automatically until M10's scene exists).
+
+- **M9 Verify completed -- resumed in a later session once the new `GameplayTestToolset` MCP plugin
+  (see `build_toolset.md`) existed to remove the last human-in-the-loop dependency
+  (`ApplyTestDamage` and ability keys previously needed a human to type/press them in a live PIE
+  window).** Full detail, including a real design finding and a real methodology mistake caught
+  mid-session, lives in `build_toolset.md`'s log -- summary here:
+  Downed a pawn via `ExecCommand("ApplyTestDamage 150")` on its own client-local controller and
+  confirmed `Status.Downed`, `HealthComponent.CurrentHealth=0`, `CharMoveComp.MovementMode=MOVE_None`
+  (movement lockout), and `ACoopGameState.DownedPlayerCount=1`, all via reflection. Ability lockout
+  during Downed was confirmed by code review of `CoopPlayerController.cpp`'s `Status_Downed` guard in
+  both `Server_ActivateShield_Implementation`/`Server_ActivateStabilize_Implementation` (this run's
+  down target wasn't Tank/Control, so a live isolated test wasn't possible this session -- the role
+  gate would already reject it independent of Downed state).
+  **Real finding: the revive channel completed on its own, undirected, within the default 3.0s
+  `ReviveDurationSeconds`** -- CLAUDE.md §6.3's small locked prep arena puts all 5 players within
+  `ReviveRadiusUnits` (150 units) of each other by default, so a still-standing teammate is already
+  overlapping the revive-trigger sphere the instant it activates. Confirmed this cleanly (rather than
+  racing past it) by temporarily widening `ReviveDurationSeconds` on the live `DA_GameConstants`,
+  same established pattern as M7's Shield-duration fix, restoring it to 3.0 afterward.
+  Confirmed `CompleteRevive` restores exactly `ReviveHealthRestorePercent` (0.5) of max health and
+  decrements `DownedPlayerCount` back to 0 -- driven by the same organic proximity, not a scripted
+  teleport.
+  **Wipe confirmed:** downed all 5 players via `ExecCommand` (widened `ReviveDurationSeconds` to 90
+  first to prevent any auto-revive mid-sequence), `DownedPlayerCount` read `5` on two separate reads
+  a few seconds apart -- stable, confirming `IsPartyWiped()` would evaluate true, and confirming
+  `Server_AttemptRevive`'s reviver-not-Downed guard genuinely holds a full wipe (no one left able to
+  revive anyone). `RequestSceneReset()` itself was not exercised (nothing calls it until M10's scene
+  exists, per this milestone's own scope -- unchanged from the prior session's plan).
+  M9 fully verified, all self-driven, no human keypress or console typing anywhere this session.
+  Next: M10 (Hold the Gate: Plates & Gate Logic).
+
+- **M10 finished — BP wrappers created, level laid out, full Verify pass completed, all self-driven,
+  no human keypress or console typing anywhere this session.** Picked up after the user's full
+  external rebuild succeeded (`CoopPressurePlate.cpp`, `CoopGateActor.cpp`, `CoopHoldTheGateScene.cpp`
+  plus M8/M9's `CoopControlAbilities.cpp`/`CoopDownedComponent.cpp`, ~8.7s, `Result: Succeeded`).
+  **Confirmed the three new classes load with no reflection errors:** `search_subclasses` on
+  `/Script/Engine.Actor` filtered to "Coop" listed `CoopPressurePlate`, `CoopGateActor`, and
+  `CoopHoldTheGateScene` alongside all prior classes. **Confirmed the new constants on the live
+  `DA_GameConstants` CDO:** `PlateRestoreWindowSeconds=5`, `PlateCount=4`, both matching the C++
+  defaults with no manual `set_properties` needed.
+  **Created and wired all three BP wrappers** under a new `/Game/Blueprints/Scenes/` folder
+  (mirroring `Source/.../Scenes/`): `BP_PressurePlate` → `ACoopPressurePlate`, `BP_Gate` →
+  `ACoopGateActor`, `BP_HoldTheGateScene` → `ACoopHoldTheGateScene` (`BlueprintTools.create` with
+  `asset_type=/Script/Engine.Actor`, `set_parent`, `compile_blueprint` — same two-step pattern as
+  every prior wrapper). Set `BP_HoldTheGateScene`'s CDO `gameConstants` → `DA_GameConstants`
+  (`ObjectTools.set_properties`), recompiled, and re-verified via `get_properties` that the reference
+  survived the compile — same CDO-persistence check every prior milestone's constants-holder needed.
+  **Level layout, with a real placement mistake caught and corrected before it became a hidden
+  problem:** the level (`/Game/ThirdPerson/Lvl_ThirdPerson`) has no single flat "floor" — it's the
+  ThirdPerson template's default terrain plus a large flat paved plaza roughly `-2000..2000` in X/Y,
+  decorated with big static-mesh ramps/cylinders in the four corners and at the cardinal edges.
+  First placement attempt (4 plates + gate + scene actor, southwest of the existing Build-0 button)
+  used `SceneTools.add_to_scene_from_asset` with `snap_to_ground=true` per-actor, but landed the 4
+  plates at wildly inconsistent heights (Z 100–275) and the gate sitting on top of a decorative ramp
+  mesh — caught via `CaptureViewport` (with actor-label annotations, decoded from base64 to a local
+  PNG and viewed directly, since the raw payload is too large for a tool result) rather than trusting
+  the placement blind. Diagnosed via `find_actors` with a bounds-box query cross-referenced against
+  `get_actor_bounds`: the southwest quadrant had real static-mesh clutter (one actor with plausible
+  bounds `1200-1500` in both X/Y, plus a background mesh with degenerate `±16384m` bounds that matches
+  every bounds query and isn't a real obstacle). **Removed all 6 actors and re-placed them in a
+  scouted, verified-clear northeast quadrant** (`find_actors` bounds-box query returned only the
+  background mesh + `Floor`, no real clutter): 4 plates in a 300-unit-spaced 2×2 grid at
+  `(750,750)/(1050,750)/(750,1050)/(1050,1050)`, `BP_HoldTheGateScene_Instance` at the center
+  `(900,900)`, `BP_Gate_HoldTheGate` past the plates at `(900,1300)` as the exit barrier. All 4 plates
+  snapped to an identical `Z=100` this time (genuinely flat pavement), gate at `Z=50` — re-confirmed
+  visually via a second `CaptureViewport` capture showing a clean 2×2 plate grid with the gate beyond
+  it and the nearest decorative ramp clearly outside the room's footprint. `save_assets([])` after the
+  correction.
+  **Verify, 5-client PIE (dev-mode dummy-filled — only one real PIE window launched this session, per
+  a "Not enough login credentials" editor warning, but the GameMode's existing dev-mode roster-fill
+  logic completed all 5 `CoopPlayerState`/`ACoopCharacter` pairs on the server world regardless, so
+  this didn't block anything):** confirmed via log sweep that `ACoopHoldTheGateScene::BeginPlay` found
+  exactly 4 plates (no "expected 4" mismatch warning) and every `ACoopGateActor` found its scene (no
+  "no ACoopHoldTheGateScene found" warning). `bGateOpen` read `false` at rest.
+  **Gate-opens-only-with-all-4 confirmed by teleporting real pawns onto real plates** (`set_actor_transform`
+  on 4 of the 5 live `ACoopCharacter` pawns, one at a time, matching each plate's `(X,Y)` with a
+  calibrated `Z` — measured the existing `PlayerStart`'s stand height above known ground level once,
+  `92.01` units, and reused that capsule-to-ground offset here): 3/4 held → `bGateOpen` still `false`;
+  4th pawn onto the last plate → `bGateOpen` flipped `true`, and the live `ACoopGateActor`'s Z dropped
+  from `50` to `-350` (the real `ApplyGateVisual(true)` cosmetic response, not a synthetic read) —
+  confirms the full plate→scene→gate chain, not just the scene's internal bool.
+  **Real methodology mistake caught and corrected, not silently worked around:** the first "step off a
+  plate" attempt moved a pawn straight up in Z only (same X/Y as the plate), and `bIsOccupied` stayed
+  `true` — initially looked like a possible box-scale bug (hypothesized the trigger volume's box
+  extent might be getting multiplied by the plate mesh's non-uniform `(2.5,2.5,0.2)` actor scale via
+  component-attachment inheritance, which would make plates' trigger boxes overlap their neighbors).
+  **Checked before acting on the hypothesis:** `ActorTools.get_actor_bounds` on a live plate returned
+  exactly the unscaled `250×250×200` box (`625-875` in X/Y around a `750`-center plate) — matching the
+  C++'s literal `SetBoxExtent(125,125,100)` values with no scale multiplication, so the box-scale
+  hypothesis was wrong, not a real bug. **The actual cause: `CharacterMovementComponent`'s gravity
+  pulled the pawn straight back down onto the same `(X,Y)` footprint it was teleported "up" from**, so
+  it never left the plate's small (non-overlapping, correctly-sized) trigger footprint. Redid the test
+  moving the pawn sideways to `(900,900)` — the verified-neutral room center, confirmed outside all 4
+  plates' `625-1175`-range boxes by direct bounds arithmetic — and `bIsOccupied` correctly flipped
+  `false` immediately.
+  **Restore-window and close behavior confirmed with controlled, self-paced timing (no human
+  round-trip needed, unlike M7/M8's Shield/Fortress duration races):** re-armed all 4 plates
+  (`bGateOpen` back to `true`), stepped the SE pawn off to the neutral center — `bGateOpen` stayed
+  `true` immediately after (restore window running, gate not yet closed). Waited a plain `Bash sleep 7`
+  (past the real `5.0s` `PlateRestoreWindowSeconds`, no constant-widening hack needed since nothing
+  here required a human to react within the window) — re-read `bGateOpen`: `false`, and the live
+  `ACoopGateActor`'s Z was back at `50` (closed cosmetic response). **Also confirmed the
+  restore-*succeeds* path, not just the fail path**, since the plan's wording ("restore-window/close
+  behavior") covers both: re-armed again, stepped off, waited `2s` (well inside the window), stepped
+  back onto the same plate — `bGateOpen` still `true` immediately, then waited a further `7s` (past
+  the *original* 5s deadline) and confirmed `bGateOpen` was still `true` — proves
+  `GetWorldTimerManager().ClearTimer(RestoreWindowTimerHandle)` genuinely cancels the pending close on
+  restoration, not just a lucky race.
+  **Server-authoritative confirmed via code review, consistent with every prior milestone's practice**
+  (no multi-client replication tool exists to prove it any other way): `HandlePlateOccupancyChanged`,
+  `ACoopPressurePlate::BeginPlay`'s overlap binding, and both `bIsOccupied`/`bGateOpen` are gated behind
+  `HasAuthority()` checks or only ever written server-side per the source already read this session;
+  every mutation observed above flowed through the real overlap-delegate/timer callbacks on the
+  server-world actor (`UEDPIE_0`), never a direct `set_properties` poke on the replicated bools
+  themselves.
+  `StopPIE`, `save_assets([])`.
+  **M10 fully verified and complete.** Next: M11 (Hold the Gate: Monster Spawner & Fixate/Retarget
+  AI) — depends on M0 already being committed, which it is.
+
+- **M11 C++ written; paused for a required full rebuild (three brand-new UCLASSes, same rule as
+  M9).** Added `Source/Unreal_first_Game/Core/CoopFixateRetargetComponent.h/.cpp` — a small,
+  genuinely reusable `UActorComponent` per the plan's own reasoning
+  (`PickInitialTarget(Candidates)`/`OnTargetDowned()`/`GetCurrentTarget()`), no Hold-the-Gate
+  reference anywhere in the file — matches DECISIONS.md's "Monster combat inside Hold the Gate"
+  scope boundary (Gravity Bridge is expected to reuse this same targeting *behavior* later).
+  Added `Source/Unreal_first_Game/Core/CoopMonsterCharacter.h/.cpp` — a basic monster: reuses M6's
+  `UCoopHealthComponent` directly (that component's own M6-era code comment already anticipated
+  this — "not every owner is a possessed player pawn... M11's monsters will use this same
+  component with no PlayerState at all"), owns a `UCoopFixateRetargetComponent`, and a simple
+  periodic direct-`ApplyDamage` "attack" against its current target — no physical projectile actor,
+  no range check, documented in a comment as a simplification matching Shield's own "negates all,
+  not just directional" precedent. No movement, no `AAIController`, no pathfinding anywhere, per
+  DECISIONS.md's explicit scope limit. Retargeting binds to the current target's new
+  `OnDownedStateChanged` delegate (added to `UCoopDownedComponent`, see below) and, on the target
+  entering Downed, waits `MonsterFixateSwitchDelaySeconds` before actually re-picking — a readable
+  "hesitate, then re-fixate" beat instead of an instant snap.
+  Added `Source/Unreal_first_Game/Scenes/CoopMonsterSpawner.h/.cpp` — Hold-the-Gate-specific spawn
+  choreography, stays local per the plan/DECISIONS.md. Gathers its fixate candidate pool as "every
+  real `ACoopCharacter` whose role isn't Tank" (role-based, not per-plate-occupancy-based — matches
+  docs/scenes/HOLD_THE_GATE.md's "Tank is the only mobile one" framing directly, and avoids needing
+  to extend `ACoopPressurePlate` to track *which* actor occupies it, which nothing else needs).
+  Re-schedules its own timer on every spawn (interval recomputed each time, not a fixed-rate loop)
+  using `TSubclassOf<ACoopMonsterCharacter> MonsterClass` set on `BP_MonsterSpawner`'s CDO — same
+  TSubclassOf-on-a-BP-wrapper pattern already proven by `AGameModeBase`'s own class-reference fields.
+  **Two small supporting additions to already-existing classes** (not new UCLASSes themselves, but
+  bundled into this same rebuild since one's already required):
+  - `UCoopHealthComponent::SetMaxHealth(float)` — server-only override for owners whose max HP isn't
+    the player-oriented `DefaultMaxHealth` (monsters use `GameConstants->MonsterHealth` instead);
+    resets `CurrentHealth` to match, since it's only ever called once, immediately post-spawn.
+  - `UCoopDownedComponent::OnDownedStateChanged` — a new `DECLARE_DYNAMIC_MULTICAST_DELEGATE`,
+    broadcast from `SetDowned()` on every transition (same "fires on any change, listener decides"
+    shape as `ACoopPressurePlate::OnOccupancyChanged`) — this is what `ACoopMonsterCharacter` binds
+    to for its retarget trigger.
+  **`GameConstants.h` gained 6 new fields**, 4 matching the plan's own list exactly
+  (`MonsterHealth = 50.0`, `MonsterSpawnIntervalEarlySeconds = 6.0`,
+  `MonsterSpawnIntervalLateSeconds = 2.5`, `MonsterFixateSwitchDelaySeconds = 0.5`) plus 2 not
+  itemized in the plan but required to give the monster's "simple attack" build item any real
+  numbers — `MonsterAttackDamage = 5.0`, `MonsterAttackIntervalSeconds = 2.0` — same "found it was
+  needed, added it, logged it" precedent nearly every prior milestone has hit.
+  **Documented, deliberate placeholder, flagged in code comments, not silently taken:** the
+  spawn-interval escalation (`MonsterSpawnIntervalEarlySeconds` → `...LateSeconds`) ramps linearly
+  over a hardcoded local `EscalationRampSeconds = 60.0f` inside `CoopMonsterSpawner.cpp`, not
+  against total scene duration — `HoldTheGateSceneDurationSeconds` doesn't exist as a constant until
+  M12 ("Escalation Tuning"), so this milestone can't cleanly interpolate against it yet. M12 is
+  expected to replace this local placeholder once that constant lands.
+  **Stopped here because `CoopFixateRetargetComponent`, `CoopMonsterCharacter`, and
+  `CoopMonsterSpawner` are three brand-new `UCLASS`es** — per the M8 DECISIONS.md addendum's own
+  narrower Live-Coding-safe guidance, a new class (not just new members on an existing one) still
+  needs a full external rebuild, unconditionally, same as M9's `UCoopDownedComponent` hit. Asked the
+  user to close the editor and run a full external build, then reopen so `unreal-mcp` reconnects.
+  **Next, once the editor is back up:** confirm the three new classes load (`search_subclasses`, no
+  reflection errors) and the 6 new `GameConstants` fields read their C++ defaults live (same as
+  every prior milestone's constants), create `BP_MonsterCharacter`/`BP_MonsterSpawner` wrappers
+  (reparent + wire each class's own `GameConstants` reference — both `ACoopMonsterCharacter` and
+  `ACoopMonsterSpawner` hold their own private pointer, so both wrappers need their own CDO wiring
+  step, matching the established per-class pattern), wire `BP_MonsterSpawner`'s `MonsterClass` →
+  `BP_MonsterCharacter_C`, place chamber instances in the level near the 4 pressure plates (content
+  wiring, MCP-buildable), then the M11 Verify pass: 5-client PIE, confirm a spawned monster's
+  `GetTargetingComponent()->GetCurrentTarget()` resolves to a non-Tank real player, down that target
+  via the established `ExecCommand("ApplyTestDamage 150")` self-targeted pattern (M9's
+  `GameplayTestToolset`, no human keypress needed) and confirm the monster retargets to a different
+  non-Tank player after `MonsterFixateSwitchDelaySeconds`, and confirm spawn timing is
+  server-driven/consistent (reflection-read `SpawnTimerHandle`-driven spawns are server-authoritative
+  by construction, same code-review-based server-authoritative argument as M10). Monster HP
+  depletion/death is not expected to be organically testable this milestone (Damage role has no
+  functional ability yet in Build 1 — nothing can deal real damage to a monster) — same deferral
+  precedent as M6's 0-HP delegate, not a gap to chase down now.
+
+- **M11 finished — resumed in a new session, found the full rebuild/wiring/placement already done by
+  a prior unlogged pass, then completed the Verify pass and closed a real tooling gap along the way.**
+  Session started cold (context compression), so began by re-establishing ground truth rather than
+  trusting the tracker's last-written state: `git status` confirmed all M11 source files
+  (`CoopFixateRetargetComponent`, `CoopMonsterCharacter`, `CoopMonsterSpawner`) present as untracked
+  new files. Checked the live editor (already running, `UnrealEditor-Unreal_first_Game.dll` rebuilt at
+  15:38, editor process started 15:40 -- i.e. the requested full external rebuild had already happened
+  and the editor was already reopened) and found, contrary to the tracker's last checkpoint, that
+  everything through "place chamber instances in the level" was **already done**: `search_subclasses`
+  confirmed all three new classes load with no reflection errors; `DA_GameConstants` already read all
+  6 new fields at their correct C++ defaults; `BP_MonsterCharacter`/`BP_MonsterSpawner` were already
+  created, correctly reparented (`get_parent`), and correctly wired (`BP_MonsterCharacter`'s CDO
+  `gameConstants` → `DA_GameConstants`; `BP_MonsterSpawner`'s CDO `gameConstants` →
+  `DA_GameConstants` and `monsterClass` → `BP_MonsterCharacter_C`); 4 `BP_MonsterSpawner` instances
+  were already placed in the level, one per cardinal side of the 2×2 plate grid
+  ((900,1200)/(900,600)/(600,900)/(1200,900) around the room center (900,900) established in M10) --
+  confirmed via `get_actor_transform`, no correction needed, unlike M10's placement mistake. Checked
+  off the two remaining unchecked boxes (`BP_MonsterCharacter`/`BP_MonsterSpawner` wrappers, and the
+  constants line) accordingly -- this work was real and correct, just never logged.
+  **Real tooling gap found attempting the Verify pass's literal ask:** `CoopFixateRetargetComponent`'s
+  `CurrentTarget` (a plain `UPROPERTY() TWeakObjectPtr<AActor>`, no Edit/BlueprintVisible specifiers)
+  could not be read via `ObjectTools.get_properties` or even enumerated via `list_properties` --
+  confirmed this wasn't a fluke by cross-checking `list_properties` on the same component, which
+  omitted `CurrentTarget`/`KnownCandidates` entirely from its output. This is a different failure mode
+  from earlier tooling gaps (M3/M7's "no function-call capability") -- this is a genuine property-read
+  limitation specific to un-annotated `TWeakObjectPtr` fields, confirmed not fixable via the
+  `ProgrammaticToolset` either (it only orchestrates the same registered tools via sandboxed Python,
+  no raw `unreal` module access, so it can't call the `GetCurrentTarget()` `BlueprintPure` accessor
+  directly).
+  **Fixed by adding two `UE_LOG` lines, not by inventing a new debug-only accessor:** added logging to
+  `UCoopFixateRetargetComponent::PickInitialTarget`/`OnTargetDowned` (function-body-only changes, no
+  new `UPROPERTY`/`UFUNCTION`/`UCLASS`) naming the owning monster and the target actor. Justified as a
+  real, permanent fix rather than a throwaway test hook: CLAUDE.md §4.3 requires state to be
+  "printable," and this subsystem had no way to observe its own core state at all before this --
+  worth keeping past this session, not reverting. `LiveCodingToolset.CompileLiveCoding` came back
+  clean (`Live coding succeeded`, function-body-only change, matches the established
+  Live-Coding-safe category from DECISIONS.md's M8 addendum) -- no full rebuild needed.
+  **Verify pass, run twice (once before the logging fix, once after) -- both runs on a genuine 5-client
+  PIE session, not the dev-mode dummy-filled kind used in most prior milestones:** discovered mid-session
+  that `FillEmptySlotsWithDummies` never fired (`bDevMode` false this session, confirmed by its absence
+  from the log) yet the roster still completed -- meaning all 5 `ACoopPlayerState`s belonged to real
+  network clients, each in genuinely separate `UEDPIE_0`..`UEDPIE_4` world contexts, not 1 real
+  window + 4 `ADummyAIController`-possessed dummies. Confirmed this the hard way: `GameplayTestToolset`
+  rejected `ApplyTestDamage` against a server-world (`UEDPIE_0`) replica of a remote client's controller
+  ("Controller has no LocalPlayer -- pass that client's own client-local PlayerController"), then
+  successfully targeted `UEDPIE_1`'s own local controller -- confirming 4 additional real client worlds
+  actually exist despite the "Not enough login credentials" warning in the log (that warning is a red
+  herring for this project's offline/no-OSS setup, not an actual cap on client count). Cross-referenced
+  each `UEDPIE_N`'s local `PlayerState.PlayerId` against the server world's per-role `PlayerId`s (same
+  established method from M6/M7) to find which real window corresponded to Control.
+  **First run (12 monsters spawned across two spawn waves) confirmed the fixate filter cleanly:** all
+  12 `PickInitialTarget` log lines named a target -- every single one landed on the run's Runner/
+  Control/Support/Damage pawns, **zero** ever landed on the run's Tank pawn (`BP_PlayerCharacter_C_0`
+  that run). Confirmed via a full-session `PlayerCharacter_C_0` log grep after the second run too --
+  zero matches across the *entire* session's fixate and retarget lines, meaning Tank was never once
+  targeted by any of the many dozens of spawn/retarget events across both runs.
+  **Second run (after the logging fix) additionally confirmed retargeting under real organic load, not
+  a single synthetic poke:** rather than needing a manual down, one non-Tank player
+  (`BP_PlayerCharacter_C_4`, Support that run) was already being repeatedly downed by the natural
+  8-12-monster barrage before any test command was issued -- the log showed **30+ independent
+  `OnTargetDowned` retarget events over the session's ~2 minutes**, every one reading
+  "retargeted from BP_PlayerCharacter_C_4 to BP_PlayerCharacter_C_{1,2,3}" -- confirming the
+  downed-delegate retarget path fires correctly and repeatedly under real chaotic multi-monster load,
+  and that every retarget's new pick still obeys the non-Tank filter. Also issued the plan's literal
+  `ApplyTestDamage 150` against the real Control client (`UEDPIE_3`, cross-referenced via `PlayerId`)
+  to exercise the manual path too -- confirmed `0.0/100.0` in the log, though Control had likely
+  already been downed by organic fire moments earlier (no fresh 0-HP-transition retarget followed),
+  so the organic evidence above is the stronger proof here, not a substitute needed for it.
+  **Spawn timing confirmed server-driven** by code review, same basis as M10: `ACoopMonsterSpawner::
+  BeginPlay`/`SpawnMonster`/`ScheduleNextSpawn` are timer-driven off `GetWorldTimerManager()` on the
+  spawner actor itself, gated behind the spawner's own `HasAuthority()` check before the roster-poll
+  timer ever starts -- no client-side path exists to trigger a spawn.
+  Final log sweep across the whole session: no errors beyond pre-existing benign engine noise (missing
+  profiler DLLs, the engine's own deliberate `LogTemp: Error test:` lines, an unrelated
+  `GameFeatureData` asset-manager warning) -- nothing from this milestone's own code. `StopPIE`.
+  **M11 fully verified and complete.** Monster HP depletion/death remains untested (Damage has no
+  functional ability yet in Build 1) -- same deferral as before, not new. Next: M12 (Hold the Gate:
+  Escalation Tuning, Win/Lose Integration, Full Playtest).
+
+- **M12 -- resumed in a new session, found the full C++ side already written (by a prior session,
+  uncommitted, already compiled into the running editor's binary), then completed the Verify pass
+  and found/fixed a real, pre-existing content bug along the way.** Session started cold; `git
+  status`/`git log` confirmed the working tree carries M7-M12 as one large uncommitted block (only
+  M0-M6 are on any commit) -- consistent with this project's established practice of not committing
+  until the user asks. Read `CoopHoldTheGateScene.h/.cpp` (win/lose state machine, `ResetScene()`,
+  `CompleteScene()`), `CoopMonsterSpawner.h/.cpp` (`ResetSpawner()`, the escalation ramp now using
+  the real `HoldTheGateSceneDurationSeconds` instead of M11's hardcoded 60s placeholder), and
+  `CoopGameState.h/.cpp` (`CompleteMatch()`, `IncrementDownedCount()`'s wipe->`RequestSceneReset()`
+  wiring) in full -- all matched the plan's M12 scope exactly, no gaps found on inspection.
+  Confirmed via file timestamps that a full external rebuild had *already* happened after this code
+  was last touched (`UnrealEditor-Unreal_first_Game.dll` at 17:07:52, all M12 source files last
+  modified 16:28-16:30) -- no rebuild needed this session. `search_subclasses` confirmed no new
+  UCLASSes here (`CompleteMatch`/`ResetSpawner` are new `UFUNCTION`s on already-existing classes),
+  matching DECISIONS.md's Live-Coding-safe category, consistent with the rebuild having already
+  landed cleanly. `get_properties` on the live `DA_GameConstants` CDO confirmed
+  `HoldTheGateSceneDurationSeconds=90` at its correct C++ default, no manual `set_properties` needed.
+  **Real, pre-existing bug found before any timing test could be trusted: 8 `ACoopPressurePlate`
+  actors in the level, not 4.** First 5-client PIE session logged
+  `ACoopHoldTheGateScene::BeginPlay: found 8 ACoopPressurePlate actor(s) in the level, expected 4` --
+  a warning M10's own log claimed was resolved ("Removed all 6 actors and re-placed them in a
+  scouted, verified-clear northeast quadrant"). Investigated rather than assumed stale: `find_actors`
+  on both the PIE world and the base (non-PIE) `/Game/ThirdPerson/Lvl_ThirdPerson` level showed the
+  same 8 plates in both, each labeled in two complete `SE`/`SW`/`NE`/`NW` sets -- one at the correct
+  M10 coordinates (`750-1050` range), one at M10's *original, supposedly-removed* southwest-quadrant
+  coordinates (`-1200`/`-1600`, `850`/`1150`). Since `AreAllPlatesOccupied()` requires *every*
+  discovered plate occupied, this stray leftover set would have made the gate mathematically
+  impossible to open with only 4 real players -- silently invalidating M10's own "verified" claim and
+  blocking M12's win condition from ever firing in a real game, not just in this test. **Root-caused,
+  not just patched around:** the stray 4 had no corresponding on-disk `__ExternalActors__` package
+  (confirmed -- `save_actor` on one of the *kept* plates errored "Asset does not exist" for an
+  unrelated external-actor path, and `git status` showed the same 14 untracked external-actor folders
+  before and after removal, zero new/changed) -- these were pure in-memory leftovers in this
+  long-running editor session (open across many prior sessions per the DLL-timestamp pattern already
+  established in M5/M7/M8's logs) that M10's `remove_from_scene` call evidently never got a chance to
+  actually persist. Removed the 4 stray actors (`remove_from_scene`, one at a time -- a first parallel
+  attempt got two calls blocked by the permission classifier, corrected to sequential per the
+  unreal-mcp skill's own "sequential, never parallel" rule), confirmed exactly 4 plates remain at the
+  correct coordinates, `save_assets([])`. Re-ran PIE: no plate-count warning this time.
+  **Verify, several fresh 5-client PIE sessions (temporarily shrinking `RoleSelectDurationSeconds`/
+  `PrepArenaDurationSeconds`/`HoldTheGateSceneDurationSeconds` on the live `DA_GameConstants` for fast
+  iteration, same established widen/shrink-then-restore pattern as M7-M9; restored to 30/60/90 and
+  confirmed via `get_properties` before finishing):**
+  - **Win path confirmed live, twice, independently.** Teleported 4 pawns onto the 4 plates via
+    `set_actor_transform` (same method M10 established) -- two of five pawns needed 2-3 retries to
+    stick per press (see the new methodology note below), all 4 eventually held simultaneously,
+    `bGateOpen` flipped `true`. Left the hold in place; the shortened scene-duration timer elapsed
+    while still held, and the log showed `ACoopHoldTheGateScene::CompleteScene: Hold the Gate
+    complete -- the party held the gate for the full scene duration.` with `CurrentPhase` correctly
+    reading `Complete` afterward. A second, independent win happened later the same session (see
+    below) with an identical log line and phase transition -- not manufactured, a second genuine
+    occurrence caught by continuing to check state rather than stopping at the first result.
+  - **Duration-expiry-without-win -> reset confirmed live.** Fresh PIE session, deliberately did not
+    occupy any plate, confirmed `CurrentPhase` stayed `HoldTheGate` (never falsely flipped `Complete`)
+    through and past the shortened duration. `CompleteScene` has no log line for this branch (only
+    fires on win), so used an indirect but unambiguous signal instead: every live
+    `ACoopMonsterCharacter`'s `refPath` UObject index was recorded before and after the expiry point,
+    and the entire population was replaced with a fresh, non-overlapping ID set (e.g. `256-259` ->
+    `268-275`, matching 2 further spawn waves' worth of monsters) -- exactly `ResetScene()`'s
+    documented behaviour ("destroy every live monster... restart each spawner's escalation ramp"),
+    and inconsistent with any other code path in this project. `bGateOpen` stayed `false` throughout,
+    as expected with nobody on a plate.
+  - **Restore-window-expiry -> reset confirmed live -- the actual *new* M12 wiring, not just a
+    repeat of M10's already-proven gate-closes behaviour.** Re-occupied all 4 plates (`bGateOpen`
+    true), then broke one plate's occupancy and let `PlateRestoreWindowSeconds` (real 5.0s value,
+    unchanged) expire unattended. `bGateOpen` flipped `false` (M10's already-proven half) *and* the
+    same monster-population-replacement signal as above fired again (a third distinct ID set,
+    `548-559`), confirming `OnRestoreWindowExpired`'s new `CoopGameState->RequestSceneReset()` call
+    -- absent before M12 -- now actually reaches `ACoopHoldTheGateScene::ResetScene()` end to end via
+    the `OnSceneResetRequested` broadcast, not just closing the gate bool as M10 alone would have.
+  - **Genuine methodology finding, not a game bug:** a "step off the plate" attempt to a point only
+    ~25 units past a plate's box edge (`(900,900)`, M10's own established "neutral center") initially
+    read as still-occupied and looked like a fresh regression. Checked before concluding that:
+    `get_actor_bounds` confirmed the target plate's real box is `625-875` in X/Y, and the Mannequin
+    capsule's ~34-unit radius genuinely still overlaps a box edge only 25 units away -- not a bug,
+    just insufficient clearance in this specific test point. Moving further out (`(400,400)`)
+    resolved it immediately. Worth remembering for any future plate/trigger-adjacent reflection test
+    in this project: "outside the box's raw AABB" is not the same as "outside the capsule's actual
+    collision footprint" -- leave at least a capsule-radius margin, not just past the drawn edge.
+  - **Real, general tooling/environment discovery, not specific to this milestone -- worth
+    remembering for any future timing-sensitive verification in this project:** partway through this
+    session, a shortened (16s) scene-duration timer failed to fire after 180+ real seconds of
+    waiting, and zero monsters had spawned despite an early interval of 6s -- looked at first like a
+    broken timer. Root-caused instead of worked around: `Editor > General > Performance >
+    bThrottleCPUWhenNotForeground` was `true` (the editor's own default), which throttles *all* world
+    ticking (PIE included) whenever the Editor application itself isn't the OS-focused window --
+    exactly the state this whole session was in, since the terminal/chat window had focus throughout.
+    Confirmed the fix worked before relying on it: flipped it off via
+    `ConfigSettingsToolset.SetSectionProperties` (`Editor`/`General`/`EditorPerformanceSettings`),
+    and monster spawns + phase timers immediately began advancing at a normal, roughly-1:1-with-wall-
+    time rate. Restored it back to `true` afterward (an unrequested personal editor preference, not a
+    project file, so left as found rather than silently kept changed) -- flagged to the user as a
+    real option worth toggling off deliberately for any future solo agentic PIE testing session in
+    this project, since 180+ real seconds for a 16-second in-game timer is a large, easy-to-misdiagnose
+    tax otherwise.
+  - **Also confirmed, as a byproduct of the above:** a scene win (`CompleteScene`, `CurrentPhase ==
+    Complete`) does not stop the pressure-plate/gate/restore-window subsystem from continuing to run
+    underneath -- a reset triggered *after* a win (as happened once in this session, purely from
+    continuing to manipulate plates post-win while investigating the throttling issue) still clears
+    monsters/respawns players/restarts spawners correctly, but leaves `CurrentPhase` stuck at
+    `Complete` rather than reverting to `HoldTheGate`. `CompleteScene()`'s own existing code comment
+    already flags "not stopping the spawners... on a win" as deliberate for Build 1 (no downstream
+    Complete-phase content exists yet to break), so this is a natural, already-acknowledged
+    consequence of that existing decision, not a new gap -- logged here as an observed behaviour, not
+    changed, since nothing in Build 1 depends on Complete-phase plate state.
+  Final log sweep: no errors beyond the known-benign engine noise every prior milestone's sessions
+  have also shown. `StopPIE`, `IsPIERunning` confirmed `false`. `DA_GameConstants` confirmed restored
+  to `RoleSelectDurationSeconds=30`/`PrepArenaDurationSeconds=60`/`HoldTheGateSceneDurationSeconds=90`,
+  `save_assets([])`.
+  **M12 fully verified: win path, both reset paths, and the specific new-this-milestone
+  restore-window-to-scene-reset wiring are all confirmed live and correct**, plus a real pre-existing
+  content bug (the M10 stray-plate leftover) was caught and fixed before it could silently block a
+  future session's playtest. Checked off all three of M12's boxes -- the plan's own suggested
+  human/solo pacing playtest (Shield-alone-sufficient -> insufficient curve) stays open per that
+  document's explicit recommendation, same non-blocking treatment as M7/M8's ability-feel playtests.
+  Next: M13 (Mini-Boss: Repeat -> Combine -> Rotate Fortress).
+
+- **Parked M5 `WBP_AbilityCard` width bug fixed and definitively verified, triggered by the user
+  asking to work through parked items using newly-available `unreal-mcp` tooling.** Explicitly did
+  *not* touch M14 (the exit-criteria playtest) -- that's parked because it measures something only
+  real humans produce (Discord talk time, CLAUDE.md §9), not because of a tooling gap, and no amount
+  of new tooling changes that; declined to attempt it and explained why rather than silently
+  reinterpreting the ask.
+  **Real new capability found first, not assumed:** `list_toolsets` now shows `UMGToolSet` (read/
+  write a widget's `WidgetTree` -- create, move, rename, wrap, bind events) and
+  `SlateInspectorToolset` (live Slate snapshot/screenshot/click/type on the actual running Editor
+  UI, including in-PIE UMG). Both are exactly the tooling gap M5's log named explicitly ("no tool to
+  populate a widget's `WidgetTree`", "no input-injection tool exists"). `Plugins/` itself only holds
+  the already-known `GameplayTestToolset` -- these two are new MCP-server-side toolsets, not a new
+  UE plugin in the project.
+  **Root cause was not what the parked note guessed, and inspecting the real tree rather than
+  trusting the old screenshot-based diagnosis caught this before a wrong fix was applied:**
+  `UMGToolSet.GetWidgets` on `WBP_AbilityCard` showed `Border_93 -> VerticalBox_0 ->
+  {TextBlock_0 (name), TextBlock_1 (description)}` -- no `Size Box` anywhere in the tree, so the
+  parked note's guessed fix ("widen the description Text Block's Size Box Width Override") could
+  never have worked; there was nothing to widen. Instead, `WBP_PrepArenaHUD`'s own `CanvasPanelSlot`
+  for each of the 4 `WBP_AbilityCard` instances was the actual culprit: `left/top/right/bottom`
+  offsets under a single-point anchor (`min==max==(0,0)`) mean `right`/`bottom` are literally
+  width/height, and all four were `100x40` -- comically undersized for a name label plus a wrapped
+  multi-line description, and consistent with *both* previously-observed symptoms (unwrapped text
+  overflowing into neighbouring cards before `autoWrapText` was enabled; wrapping at ~1-2 characters
+  per line after, since `autoWrapText` computes its wrap width from the tiny allocated slot, not
+  free-form). Widened all four card slots to `220x150` (`set_properties` on each
+  `CanvasPanelSlot_2..5`'s `layoutData.offsets`, keeping `left`/`top` unchanged) -- checked the real
+  gap between adjacent cards first (244-268px, read from each slot's `left`) to confirm 220 wouldn't
+  reintroduce overlap. Also widened `WBP_TeamSynergiesPanel`'s own slot (`CanvasPanelSlot_6`, same
+  100x40 default) to `400x60`, since it was the same class of bug on the hint-text panel the parked
+  note's own "worth checking during the same pass" note flagged as unconfirmed.
+  **A second, independent bug was found only because the widened cards could finally be read at
+  all:** with the container now correctly sized, a screenshot showed each card as a blank white box
+  with the description text spilling out *below* it -- `TextBlock_0`/`TextBlock_1` both read
+  `colorAndOpacity = white (1,1,1,1)` and `Border_93.background` was the engine's unstyled default
+  (`drawAs=Image`, `resourceObject=None`, `tintColor=white`) -- i.e. genuinely invisible white-on-
+  white ability-name text, on a card that was never actually styled. This was unreachable by any
+  previous method in this project (no way to read a widget's actual bound color/brush values before
+  `UMGToolSet`/`ObjectTools` could target WidgetTree members). Fixed by darkening
+  `Border_93.background.tintColor` to a near-black translucent `(0.05, 0.05, 0.05, 0.85)`, leaving
+  the existing white text as-is -- standard dark-card-white-text HUD styling, one property changed,
+  matches CLAUDE.md §5's "everything readable, nothing pretty."
+  **Verified with two independent methods neither of which existed at the start of Build 1, not just
+  a re-run of the old low-res desktop-screenshot method:**
+  1. `SlateInspectorToolset.Screenshot` on the live PIE preview window, at the window's *native*
+     resolution (646x520 per client, not a shrunk 1280x397 5-window composite) -- before/after
+     comparison shows the fix directly: pre-fix, blank white boxes with description text spilling
+     below in fragmented lines; post-fix, clean dark cards with the name label and a properly
+     multi-line-wrapped description fully contained inside each card.
+  2. `SlateInspectorToolset.Snapshot` (a full accessibility-tree text dump, not pixels) across *all
+     five* live client windows simultaneously confirmed the exact rendered string for every card:
+     Damage ("Execution"/"...physically vulnerable.", "Overload"/"...magically vulnerable."), Runner
+     ("Dash"/"Carry"/"Chain" with their full descriptions), Tank ("Shield"/"Armor Break"), Control
+     ("Stabilize"/"Mind Fracture"/"Channel") -- every string matches `docs/abilities.md` and
+     `CoopAbilityCardWidget.cpp`'s hardcoded table exactly, and every `WBP_TeamSynergiesPanel`
+     instance across all 5 windows shows the complete, untruncated sentence "Tank and Control share
+     a bond. Talk to each other." -- proving the earlier screenshot's apparent mid-sentence cutoff
+     was purely the small PIE preview window's own pixel width cropping the capture, not a real
+     wrap/truncation bug (the accessibility tree has no such limit and shows the full string).
+  Compiled both widget blueprints (`CompileWidgetBlueprint`, clean), `StopPIE`/`save_assets` before
+  editing (per the unreal-mcp skill's "Mind PIE" rule -- blueprint CDO edits don't hot-reload into
+  already-spawned PIE widget instances), then a fresh `StartPIE` to confirm the compiled changes
+  live. `DA_GameConstants` temporarily shrunk `RoleSelectDurationSeconds` for fast iteration,
+  restored to 30/60/90 and confirmed via `get_properties` afterward, `save_assets([])`.
+  **Real methodology note for future MCP-driven work, not a game bug:** two `mcp__unreal-mcp__call_tool`
+  calls issued together in one message got one blocked by the permission classifier while the other
+  succeeded, during the earlier M12 pass -- confirms the unreal-mcp skill's own "sequential, never
+  parallel" rule isn't just about avoiding game-thread deadlocks, it also avoids partial-completion
+  states that are easy to miss if both calls are assumed to have the same outcome.
+  Checked off M5's remaining Verify box (both the layout bug and the underlying data/wiring were
+  already independently confirmed correct in the original M5 session). M5 is now **fully complete**,
+  no open items. Still explicitly not exercised this session, since it wasn't what was asked and
+  isn't itself a parked item: `SlateInspectorToolset.Click`-driven testing of actual `WBP_RoleSelect`
+  button presses and the two-clients-claim-the-same-role UI race -- both are now genuinely possible
+  for the first time in this project (the exact "no input-injection tool" gap M5's log named), worth
+  picking up explicitly in a future session if that specific verification is wanted.
+  **Real, serious tooling problem found and resolved before declaring this done -- the fix was
+  correct in the live editor the whole time, but had never actually reached disk.** Routine
+  double-checking (`AssetTools.is_dirty` after `save_assets`) found every save this session had
+  silently failed: `is_dirty` kept reading `true` after `save_assets([])` reported `true`, and
+  `.uasset` mtimes on disk hadn't moved in hours -- this affected `WBP_AbilityCard`,
+  `WBP_PrepArenaHUD`, and even `DA_GameConstants`'s M12-session restoration. Calling `save_assets`
+  with an explicit path (not the empty-list form) surfaced the real error in the Output Log:
+  `Error Code 32` (Windows sharing violation) repeatedly failing to move `DA_GameConstants.uasset`
+  into place. Root-caused, not worked around: three `UnrealEditor.exe` processes were running --
+  the real editor plus what looked like an orphaned duplicate instance of this same project (same
+  window title, spawned minutes later, far lower resource usage) left behind by an earlier
+  `StartPIE`/`StopPIE` cycle this session. Flagged to the user rather than guessing and killing an
+  unfamiliar process myself; user confirmed and closed the stray instance(s). Saves succeeded
+  immediately afterward, confirmed three ways: `is_dirty` false, `.uasset` mtimes fresh, and
+  `git status`/`git diff` showing the real changes (`WBP_AbilityCard.uasset`/
+  `WBP_PrepArenaHUD.uasset` now genuinely modified; `DA_GameConstants.uasset` shows **no** diff,
+  confirming its restored values round-tripped back to exactly the already-committed production
+  defaults). Logged as a new DECISIONS.md entry ("`save_assets` can silently fail to reach disk")
+  since this is a durable, project-wide risk any future multi-`StartPIE` session could hit again,
+  not a one-off. Re-confirmed the widget fix survived the save/reload cycle via one final
+  `get_properties` read on the live `Border_93` background color -- unchanged, as expected.

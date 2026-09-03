@@ -81,6 +81,52 @@ public:
 	UFUNCTION(Server, Reliable)
 	void Server_ActivateShield();
 
+	// Build 1, M8: same shape as ActivateShield/Server_ActivateShield above, bound to IA_Stabilize.
+	// Targeting is implicit (nearest Tank in range) -- see CoopControlAbilities::ResolveStabilize.
+	UFUNCTION(BlueprintCallable, Category = "Abilities")
+	void ActivateStabilize();
+
+	UFUNCTION(Server, Reliable)
+	void Server_ActivateStabilize();
+
+	// Build 1, M9: fired from UCoopDownedComponent::OnReviveTriggerBeginOverlap (the reviver's own
+	// controller, same "client that owns the overlapping pawn fires the RPC" filter as
+	// Server_PressButton). Takes no target -- the server does its own nearest-Downed-in-range search,
+	// same implicit-target shape as Server_ActivateStabilize.
+	UFUNCTION(Server, Reliable)
+	void Server_AttemptRevive();
+
+	// Build 1: same shape as ActivateShield/ActivateStabilize above, bound to IA_Speed. Support-only
+	// -- CoopSupportAbilities::ApplySpeed.
+	UFUNCTION(BlueprintCallable, Category = "Abilities")
+	void ActivateSpeed();
+
+	UFUNCTION(Server, Reliable)
+	void Server_ActivateSpeed();
+
+	// Bound to IA_Dash. Runner-only -- CoopRunnerAbilities::ResolveDash.
+	UFUNCTION(BlueprintCallable, Category = "Abilities")
+	void ActivateDash();
+
+	UFUNCTION(Server, Reliable)
+	void Server_ActivateDash();
+
+	// Bound to IA_Execution. Damage-only -- CoopDamageAbilities::ResolveExecution.
+	UFUNCTION(BlueprintCallable, Category = "Abilities")
+	void ActivateExecution();
+
+	UFUNCTION(Server, Reliable)
+	void Server_ActivateExecution();
+
+	// Dev/test only (CLAUDE.md §7), same shape as ApplyTestDamage: grants the nearest
+	// ACoopMonsterCharacter Status.Vulnerable.Physical so Execution (which has no real tag-writer
+	// until Scene 5/"The Heart" exists, per docs/abilities.md) can actually be tested now.
+	UFUNCTION(Exec)
+	void ApplyTestVulnerable();
+
+	UFUNCTION(Server, Reliable)
+	void Server_ApplyTestVulnerable();
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -121,4 +167,13 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UUserWidget> PrepArenaHUDWidget;
+
+	// The bottom-screen WoW-style ability bar (WBP_ActionBar). Same create-once-in-BeginPlay,
+	// leave-in-viewport pattern as the widgets above; UCoopActionBarWidget hides itself outside the
+	// Prep / HoldTheGate phases.
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UUserWidget> ActionBarWidgetClass;
+
+	UPROPERTY()
+	TObjectPtr<UUserWidget> ActionBarWidget;
 };

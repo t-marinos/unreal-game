@@ -6,6 +6,13 @@
 #include "Core/CoopCharacter.h"
 #include "Core/CoopHealthComponent.h"
 #include "Abilities/CoopTankAbilities.h"
+#include "Abilities/CoopControlAbilities.h"
+#include "Abilities/CoopSupportAbilities.h"
+#include "Abilities/CoopRunnerAbilities.h"
+#include "Abilities/CoopDamageAbilities.h"
+#include "Core/CoopDownedComponent.h"
+#include "Core/CoopMonsterCharacter.h"
+#include "Tags/CoopGameplayTags.h"
 #include "Dev/DummyAIController.h"
 #include "Camera/CoopOrbitCamera.h"
 #include "Blueprint/UserWidget.h"
@@ -17,8 +24,12 @@ ACoopPlayerController::ACoopPlayerController()
 {
 	// Without this, APlayerController::OnPossess snaps the view target back to the possessed pawn
 	// on every (re)possession (see AutoManageActiveCameraTarget), which would silently undo
-	// BeginPlay's SetViewTarget(OrbitCamera) below the moment a pawn is possessed. We manage the
-	// view target ourselves per CLAUDE.md §5 -- the camera must never follow a player.
+	// BeginPlay's SetViewTarget(OrbitCamera) below the moment a pawn is possessed. We still want
+	// our own ACoopOrbitCamera as the view target even though it now follows the pawn (CLAUDE.md
+	// §5, DECISIONS.md's "Camera follows the player" entry) -- it tracks the pawn's location
+	// itself in Tick, not by handing the engine the pawn as the view target directly, so a
+	// dev-mode Possess() swap doesn't rip the view away to whatever the newly-possessed pawn's
+	// own default view would be.
 	bAutoManageActiveCameraTarget = false;
 }
 
@@ -83,6 +94,17 @@ void ACoopPlayerController::BeginPlay()
 		if (PrepArenaHUDWidget)
 		{
 			PrepArenaHUDWidget->AddToViewport();
+		}
+	}
+
+	// Build 1: bottom-screen ability bar. UCoopActionBarWidget keeps itself hidden until the Prep
+	// phase, same self-gating-on-replicated-phase pattern as RoleSelectWidget/PrepArenaHUDWidget.
+	if (ActionBarWidgetClass)
+	{
+		ActionBarWidget = CreateWidget<UUserWidget>(this, ActionBarWidgetClass);
+		if (ActionBarWidget)
+		{
+			ActionBarWidget->AddToViewport();
 		}
 	}
 }
@@ -239,5 +261,188 @@ void ACoopPlayerController::Server_ActivateShield_Implementation()
 		return;
 	}
 
+	// Build 1, M9: Downed characters can't use abilities (CLAUDE.md §6.6).
+	if (CoopCharacter->HasStatusTag(CoopGameplayTags::Status_Downed))
+	{
+		return;
+	}
+
 	CoopTankAbilities::ApplyShield(CoopCharacter, GameConstants);
+}
+
+void ACoopPlayerController::ActivateStabilize()
+{
+	Server_ActivateStabilize();
+}
+
+void ACoopPlayerController::Server_ActivateStabilize_Implementation()
+{
+	// Stabilize is Control-only -- same "friends, not adversarial input" no-op reasoning as
+	// Server_ActivateShield above (CLAUDE.md §8).
+	const ACoopPlayerState* CoopPS = GetPlayerState<ACoopPlayerState>();
+	ACoopCharacter* CoopCharacter = Cast<ACoopCharacter>(GetPawn());
+	if (!CoopPS || !CoopCharacter || CoopPS->GetRole() != EPlayerRole::Control)
+	{
+		return;
+	}
+
+	// Build 1, M9: Downed characters can't use abilities (CLAUDE.md §6.6).
+	if (CoopCharacter->HasStatusTag(CoopGameplayTags::Status_Downed))
+	{
+		return;
+	}
+
+	CoopControlAbilities::ResolveStabilize(CoopCharacter, GameConstants);
+}
+
+void ACoopPlayerController::Server_AttemptRevive_Implementation()
+{
+	ACoopCharacter* Reviver = Cast<ACoopCharacter>(GetPawn());
+	if (!Reviver || Reviver->HasStatusTag(CoopGameplayTags::Status_Downed))
+	{
+		// A Downed player can't revive anyone -- CLAUDE.md §6.6.
+		return;
+	}
+
+	const float RadiusUnits = GameConstants ? GameConstants->ReviveRadiusUnits : 150.0f;
+	const FVector ReviverLocation = Reviver->GetActorLocation();
+
+	ACoopCharacter* NearestDowned = nullptr;
+	float NearestDistSq = FMath::Square(RadiusUnits);
+
+	for (TActorIterator<ACoopCharacter> It(GetWorld()); It; ++It)
+	{
+		ACoopCharacter* Other = *It;
+		if (!Other || Other == Reviver || !Other->HasStatusTag(CoopGameplayTags::Status_Downed))
+		{
+			continue;
+		}
+
+		const float DistSq = FVector::DistSquared(ReviverLocation, Other->GetActorLocation());
+		if (DistSq <= NearestDistSq)
+		{
+			NearestDistSq = DistSq;
+			NearestDowned = Other;
+		}
+	}
+
+	if (NearestDowned && NearestDowned->GetDownedComponent())
+	{
+		NearestDowned->GetDownedComponent()->BeginRevive(Reviver);
+	}
+}
+
+void ACoopPlayerController::ActivateSpeed()
+{
+	Server_ActivateSpeed();
+}
+
+void ACoopPlayerController::Server_ActivateSpeed_Implementation()
+{
+	// Speed is Support-only -- same "friends, not adversarial input" no-op reasoning as
+	// Server_ActivateShield above (CLAUDE.md §8).
+	const ACoopPlayerState* CoopPS = GetPlayerState<ACoopPlayerState>();
+	ACoopCharacter* CoopCharacter = Cast<ACoopCharacter>(GetPawn());
+	if (!CoopPS || !CoopCharacter || CoopPS->GetRole() != EPlayerRole::Support)
+	{
+		return;
+	}
+
+	if (CoopCharacter->HasStatusTag(CoopGameplayTags::Status_Downed))
+	{
+		return;
+	}
+
+	CoopSupportAbilities::ApplySpeed(CoopCharacter, GameConstants);
+}
+
+void ACoopPlayerController::ActivateDash()
+{
+	Server_ActivateDash();
+}
+
+void ACoopPlayerController::Server_ActivateDash_Implementation()
+{
+	// Dash is Runner-only.
+	const ACoopPlayerState* CoopPS = GetPlayerState<ACoopPlayerState>();
+	ACoopCharacter* CoopCharacter = Cast<ACoopCharacter>(GetPawn());
+	if (!CoopPS || !CoopCharacter || CoopPS->GetRole() != EPlayerRole::Runner)
+	{
+		return;
+	}
+
+	if (CoopCharacter->HasStatusTag(CoopGameplayTags::Status_Downed))
+	{
+		return;
+	}
+
+	CoopRunnerAbilities::ResolveDash(CoopCharacter, GameConstants);
+}
+
+void ACoopPlayerController::ActivateExecution()
+{
+	Server_ActivateExecution();
+}
+
+void ACoopPlayerController::Server_ActivateExecution_Implementation()
+{
+	// Execution is Damage-only.
+	const ACoopPlayerState* CoopPS = GetPlayerState<ACoopPlayerState>();
+	ACoopCharacter* CoopCharacter = Cast<ACoopCharacter>(GetPawn());
+	if (!CoopPS || !CoopCharacter || CoopPS->GetRole() != EPlayerRole::Damage)
+	{
+		return;
+	}
+
+	if (CoopCharacter->HasStatusTag(CoopGameplayTags::Status_Downed))
+	{
+		return;
+	}
+
+	CoopDamageAbilities::ResolveExecution(CoopCharacter, GameConstants);
+}
+
+void ACoopPlayerController::ApplyTestVulnerable()
+{
+	Server_ApplyTestVulnerable();
+}
+
+void ACoopPlayerController::Server_ApplyTestVulnerable_Implementation()
+{
+	if (!GetPawn() || !GetWorld())
+	{
+		return;
+	}
+
+	const float RangeUnits = GameConstants ? GameConstants->TestVulnerableRangeUnits : 1000.0f;
+	const float DurationSeconds = GameConstants ? GameConstants->TestVulnerableDurationSeconds : 6.0f;
+	const FVector MyLocation = GetPawn()->GetActorLocation();
+
+	ACoopMonsterCharacter* NearestMonster = nullptr;
+	float NearestDistSq = FMath::Square(RangeUnits);
+
+	for (TActorIterator<ACoopMonsterCharacter> It(GetWorld()); It; ++It)
+	{
+		ACoopMonsterCharacter* Monster = *It;
+		if (!Monster)
+		{
+			continue;
+		}
+
+		const float DistSq = FVector::DistSquared(MyLocation, Monster->GetActorLocation());
+		if (DistSq <= NearestDistSq)
+		{
+			NearestDistSq = DistSq;
+			NearestMonster = Monster;
+		}
+	}
+
+	if (!NearestMonster)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ApplyTestVulnerable: no ACoopMonsterCharacter within %.0f units."), RangeUnits);
+		return;
+	}
+
+	NearestMonster->ApplyStatusTag(CoopGameplayTags::Status_Vulnerable_Physical, DurationSeconds);
+	UE_LOG(LogTemp, Log, TEXT("ApplyTestVulnerable: granted Status.Vulnerable.Physical to %s for %.1fs."), *GetNameSafe(NearestMonster), DurationSeconds);
 }

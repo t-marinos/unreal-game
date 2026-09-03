@@ -27,6 +27,17 @@ public:
 	// needing a separate reset call -- M9's downed component subscribes to this to enter Downed.
 	void ApplyDamage(float DamageAmount);
 
+	// Server-only (CLAUDE.md §4.1). Build 1, M9: restores CurrentHealth to Percent * MaxHealth,
+	// clamped to [0, MaxHealth]. Used by Downed's revive -- unlike ApplyDamage, this never
+	// broadcasts OnHealthDepleted (that only fires on a fresh crossing into 0, never on a heal).
+	void Revive(float HealthPercent);
+
+	// Server-only. Build 1, M11: overrides MaxHealth after BeginPlay's DefaultMaxHealth-based
+	// initialization, for owners whose max HP isn't the player default (M11's monsters use
+	// GameConstants->MonsterHealth instead). Also resets CurrentHealth to match -- only ever meant
+	// to be called once, immediately after spawn, before any damage.
+	void SetMaxHealth(float NewMaxHealth);
+
 	UFUNCTION(BlueprintPure, Category = "Health")
 	float GetCurrentHealth() const { return CurrentHealth; }
 

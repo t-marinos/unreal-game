@@ -1,6 +1,9 @@
 #include "Core/CoopGameState.h"
 #include "Core/GameConstants.h"
+#include "Core/CoopCharacter.h"
+#include "Core/CoopDownedComponent.h"
 #include "Net/UnrealNetwork.h"
+#include "EngineUtils.h"
 
 void ACoopGameState::BeginPlay()
 {
@@ -76,6 +79,59 @@ void ACoopGameState::StartHoldTheGatePhase()
 	CurrentPhase = EMatchPhase::HoldTheGate;
 }
 
+void ACoopGameState::IncrementDownedCount()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	++DownedPlayerCount;
+
+	if (IsPartyWiped())
+	{
+		RequestSceneReset();
+	}
+}
+
+void ACoopGameState::CompleteMatch()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	CurrentPhase = EMatchPhase::Complete;
+}
+
+void ACoopGameState::DecrementDownedCount()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	DownedPlayerCount = FMath::Max(0, DownedPlayerCount - 1);
+}
+
+void ACoopGameState::RequestSceneReset()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	for (TActorIterator<ACoopCharacter> It(GetWorld()); It; ++It)
+	{
+		if (ACoopCharacter* Character = *It)
+		{
+			if (UCoopDownedComponent* Downed = Character->GetDownedComponent())
+			{
+				Downed->ForceRevive();
+			}
+		}
+	}
+
+	OnSceneResetRequested.Broadcast();
+}
+
 void ACoopGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
@@ -84,4 +140,5 @@ void ACoopGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	DOREPLIFETIME(ACoopGameState, CurrentPhase);
 	DOREPLIFETIME(ACoopGameState, RoleSelectEndServerTime);
 	DOREPLIFETIME(ACoopGameState, PrepPhaseEndServerTime);
+	DOREPLIFETIME(ACoopGameState, DownedPlayerCount);
 }

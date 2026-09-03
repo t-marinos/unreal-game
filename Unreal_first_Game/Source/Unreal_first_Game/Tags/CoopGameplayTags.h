@@ -13,4 +13,12 @@ namespace CoopGameplayTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Status_Shielded);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Status_Fortress);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Status_Downed);
+
+	// Build 1: Support Speed writes this, Runner Dash reads it (Thousand Dashes synergy).
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Status_SpeedBuff);
+
+	// Build 1: dev/test-granted only for now (ACoopPlayerController::ApplyTestVulnerable) --
+	// docs/abilities.md's real writer is "The Heart"'s mechanic (Scene 5, Build 2), not built yet.
+	// Damage Execution reads this on an ACoopMonsterCharacter target.
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Status_Vulnerable_Physical);
 }

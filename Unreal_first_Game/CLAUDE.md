@@ -311,21 +311,25 @@ primary failure mode for this project. If you believe a refactor is needed, say 
 
 ## 5. Presentation rules
 
-- **High 3/4-angle camera in a 3D scene, starting fixed, now player-rotatable.** Not third-person.
-  Not top-down 2D. We keep real 3D space (body-blocking, hiding behind the shield, positioning for
-  the link chain are all gameplay). Each player can hold right-click and drag to orbit their own
-  camera around the arena center, WoW-style — implemented as a dedicated, **local-only** camera
-  actor/spring-arm setup (`Source/Unreal_first_Game/Camera/`), never replicated, never affecting what
-  any other player sees, and the camera still never *follows* a player (only the viewing angle
-  changes, not what it's centered on). The project starts from Unreal's ThirdPerson template, whose
-  default follow-camera is **not** what we want — replacing it is part of Build 0, not a later pass.
-  This reverses an earlier "fully fixed, no camera engineering at all" rule — see `DECISIONS.md` for
-  why, and treat it as reversible: if free rotation turns out to hurt readability once more scenes
-  exist, going back to a truly fixed camera is a small, contained change, not a rearchitecture.
-  **Because the angle is no longer guaranteed-fixed, any future "this only reads correctly from a
-  specific viewing angle" tell (e.g. Scene 3/The False King's "which clone is real" reveal) is
-  stricter than before, not more lenient** — it must never depend on perspective, full stop, since
-  there's no longer a single perspective everyone shares.
+- **High 3/4-angle camera in a 3D scene, starting fixed, now player-rotatable and player-following.**
+  Not third-person — the ThirdPerson template's own over-the-shoulder follow-camera is still **not**
+  what we want; this is a steep, clamped-pitch (-80° to -20°) WoW-style angle, not an
+  over-the-shoulder one. Not top-down 2D either. We keep real 3D space (body-blocking, hiding behind
+  the shield, positioning for the link chain are all gameplay). Each player can hold right-click and
+  drag to orbit their own camera around their own character — implemented as a dedicated,
+  **local-only** camera actor/spring-arm setup (`Source/Unreal_first_Game/Camera/`), never replicated,
+  never affecting what any other player sees. The camera's pivot now tracks whichever pawn the owning
+  controller currently possesses, updated every tick, so it follows the player instead of staying
+  fixed on one world-space point — only the orbit angle is still driven purely by that player's own
+  right-click-drag input, same as before. This reverses this section's earlier "camera still never
+  follows a player" rule — see `DECISIONS.md`'s "Camera follows the player" entry for why, and treat
+  it as reversible the same way the fixed→orbit reversal below it is: going back to a fixed pivot
+  (e.g. an arena center) is a small, contained change, not a rearchitecture. Replacing the template's
+  default camera with this purpose-built follow+orbit actor is part of Build 0, not a later pass.
+  **Because there is no longer even a single shared pivot, let alone a guaranteed-fixed angle, any
+  future "this only reads correctly from a specific viewing angle" tell (e.g. Scene 3/The False
+  King's "which clone is real" reveal) must never depend on perspective, full stop** — true since free
+  rotation shipped, and following the player only reinforces it, not a new constraint.
 - **The stock Unreal Mannequin (Manny/Quinn), not bare capsules.** The ThirdPerson template ships
   this skeletal mesh pre-rigged and pre-animated (idle/walk/run/jump) for free — using it as-is costs
   zero extra art or animation production time, so we keep it rather than stripping it down to a

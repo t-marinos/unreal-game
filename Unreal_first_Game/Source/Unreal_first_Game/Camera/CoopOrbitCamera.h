@@ -12,9 +12,11 @@ class APlayerController;
 // Local-only, per-player orbit camera (CLAUDE.md §5). ACoopPlayerController spawns one of these
 // only on the machine that actually controls it (IsLocalController()), so on a Listen Server the
 // host gets exactly one and each remote client spawns their own, independently, on their own
-// machine -- never replicated, and no client's camera can affect any other client's view. It
-// orbits around a fixed pivot (the arena center) and never follows a player; only the viewing
-// angle changes, per §5's "camera still never follows a player" rule.
+// machine -- never replicated, and no client's camera can affect any other client's view. Its
+// pivot tracks whichever pawn the owning controller currently possesses (Tick reads GetPawn()
+// fresh every frame, so a dev-mode Possess() swap picks it up for free); the orbit angle around
+// that pivot is still purely local input state driven by right-click-drag. See DECISIONS.md's
+// "Camera follows the player" entry -- this reverses §5's original "never follows a player" rule.
 UCLASS()
 class UNREAL_FIRST_GAME_API ACoopOrbitCamera : public AActor
 {

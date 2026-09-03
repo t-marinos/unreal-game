@@ -31,11 +31,11 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI")
 	float MatchTimerDisplayUpdateIntervalSeconds = 0.1f;
 
-	// M5: local-only orbit camera (CLAUDE.md §5). World-space point every player's camera orbits
-	// around by default -- Build 0 has no real arena yet, so this defaults to the origin; each
-	// future scene can tune it once an actual arena exists.
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Camera")
-	FVector ArenaCenterLocation = FVector::ZeroVector;
+	// WoW-style movement (DECISIONS.md's "Camera follows the player" entry): multiplies the
+	// backward-movement input axis in BP_PlayerCharacter's Move function, so walking backward is
+	// slower than forward/strafing -- see ACoopCharacter::GetBackpedalSpeedMultiplier.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movement")
+	float BackpedalSpeedMultiplier = 0.5f;
 
 	// M5: distance from the pivot to the camera.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Camera")
@@ -94,4 +94,158 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Abilities")
 	float ShieldCoverageRadiusUnits = 300.0f;
+
+	// Build 1, M8: Control Stabilize (CoopControlAbilities::ResolveStabilize). Cooldown, and how
+	// far away a Tank can be and still be found by the implicit nearest-Tank targeting search.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Abilities")
+	float StabilizeCooldownSeconds = 10.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Abilities")
+	float StabilizeCastRangeUnits = 800.0f;
+
+	// How long Status.Fortress persists once Stabilize upgrades a Shielded Tank, the radius around
+	// that Tank within which teammates also receive Fortress (docs/abilities.md: "multi-teammate
+	// coverage, not just Tank's own facing"), and the fraction of knockback Fortress resists.
+	// FortressKnockbackResistPercent has no consumer yet -- no ability applies knockback until
+	// Hold the Gate's monsters exist (M11) -- stored now so the constant already exists when that
+	// lands, per CLAUDE.md §1's "simple now, note the tradeoff" allowance.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Abilities")
+	float FortressDurationSeconds = 8.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Abilities")
+	float FortressCoverageRadiusUnits = 600.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Abilities")
+	float FortressKnockbackResistPercent = 0.75f;
+
+	// Build 1: Support Speed (CoopSupportAbilities::ApplySpeed). Cooldown, how far away an ally
+	// can be and still be found by the implicit nearest-ally targeting search (same "no crosshair
+	// yet" reasoning as StabilizeCastRangeUnits), and how long the resulting Status.SpeedBuff lasts.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Abilities")
+	float SpeedCooldownSeconds = 8.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Abilities")
+	float SpeedCastRangeUnits = 800.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Abilities")
+	float SpeedBuffDurationSeconds = 6.0f;
+
+	// Build 1: Runner Dash (CoopRunnerAbilities::ResolveDash). Cooldown, and the LaunchCharacter
+	// impulse strength for a normal Dash vs. the boosted Thousand Dashes resolution when the
+	// caster holds Status.SpeedBuff at cast time (docs/abilities.md: "checks, doesn't consume").
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Abilities")
+	float DashCooldownSeconds = 4.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Abilities")
+	float DashImpulseStrength = 1200.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Abilities")
+	float ThousandDashesImpulseStrength = 2400.0f;
+
+	// Build 1: Damage Execution (CoopDamageAbilities::ResolveExecution). Cooldown, cast range
+	// against a Status.Vulnerable.Physical-holding ACoopMonsterCharacter, and the flat damage
+	// dealt on a successful hit (docs/abilities.md gives no hard number beyond a "~5% of boss HP"
+	// example that assumes a boss HP pool that doesn't exist yet -- a flat amount is the simpler
+	// stand-in per CLAUDE.md §1).
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Abilities")
+	float ExecutionCooldownSeconds = 6.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Abilities")
+	float ExecutionCastRangeUnits = 400.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Abilities")
+	float ExecutionDamageAmount = 100.0f;
+
+	// Dev/test only (ACoopPlayerController::ApplyTestVulnerable) -- grants the nearest
+	// ACoopMonsterCharacter Status.Vulnerable.Physical, since nothing else writes that tag until
+	// Scene 5 ("The Heart", Build 2) exists. Lets Execution actually be tested now. Same
+	// "ApplyTestDamage" precedent, not a real gameplay ability.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Abilities")
+	float TestVulnerableDurationSeconds = 6.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Abilities")
+	float TestVulnerableRangeUnits = 1000.0f;
+
+	// Build 1: overhead status badge (ACoopCharacter::StatusBarWidgetComponent /
+	// UCoopStatusBarWidget). Z offset, in world units relative to the character's root, at which the
+	// badge sits -- the stock Mannequin's default capsule half-height is commonly ~88 units in the
+	// UE ThirdPerson template, so 180 clears the head with margin. A tunable default to eyeball in
+	// PIE, not a precise measurement of this project's specific mesh.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Status")
+	float StatusBarHeightOffsetUnits = 180.0f;
+
+	// Build 1, M9: Downed/revive (UCoopDownedComponent). How long a teammate must channel a revive
+	// (re-validated at start via the RPC's own range search and again at completion, not
+	// continuously -- see CoopDownedComponent.h's documented simplification), how close they need to
+	// be, and what fraction of max health the revived player comes back with. No bleed-out timer --
+	// Downed persists until revived or the party wipes (CLAUDE.md §6.6).
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Downed")
+	float ReviveDurationSeconds = 3.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Downed")
+	float ReviveRadiusUnits = 150.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Downed")
+	float ReviveHealthRestorePercent = 0.5f;
+
+	// Build 1, M10: Hold the Gate (ACoopHoldTheGateScene/ACoopPressurePlate). Number of pressure
+	// plates that must be simultaneously occupied for the gate to open -- docs/scenes/HOLD_THE_GATE.md
+	// fixes this design at 4, but no field existed yet to hold it until this milestone.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "HoldTheGate")
+	int32 PlateCount = 4;
+
+	// How long the team has to restore full plate occupancy after it breaks before the gate closes
+	// and the scene resets (CLAUDE.md §6.6's scene-specific wipe condition) -- the gate itself stays
+	// open (cosmetically) through this grace window, per docs/scenes/HOLD_THE_GATE.md's "server-checked
+	// continuously" framing paired with "can't be restored in time."
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "HoldTheGate")
+	float PlateRestoreWindowSeconds = 5.0f;
+
+	// How tall a pressure plate's occupancy trigger is, in units, measured upward from the
+	// plate's own origin (ACoopPressurePlate::ApplyTriggerVolumeSize). The trigger used to be a
+	// symmetric 200-unit-tall column that let a character register as "occupying" a plate while
+	// still well above it or merely nearby, rather than physically standing on it -- this keeps
+	// the trigger a thin band hugging the plate's actual surface instead.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "HoldTheGate")
+	float PlateTriggerCatchHeightUnits = 30.0f;
+
+	// Build 1, M12: total time the party has to hold the gate before ACoopHoldTheGateScene declares
+	// the scripted threat sequence complete (docs/scenes/HOLD_THE_GATE.md's "Success: gate stays open
+	// long enough / the scripted threat sequence completes"). Also what ACoopMonsterSpawner ramps its
+	// spawn-interval escalation against, replacing M11's hardcoded 60s placeholder window.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "HoldTheGate")
+	float HoldTheGateSceneDurationSeconds = 90.0f;
+
+	// Build 1, M11: monster spawner/AI (DECISIONS.md's "Monster combat inside Hold the Gate").
+	// Every trash monster's max HP (UCoopHealthComponent::SetMaxHealth, overriding the
+	// player-oriented DefaultMaxHealth above).
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Monster")
+	float MonsterHealth = 50.0f;
+
+	// ACoopMonsterSpawner's repeating spawn timer interval at scene start, and the interval it
+	// ramps toward as the scene progresses (the real escalation curve against scene duration is
+	// M12's job -- M11 only ramps linearly over a short, hardcoded local window as a placeholder).
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Monster")
+	float MonsterSpawnIntervalEarlySeconds = 6.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Monster")
+	float MonsterSpawnIntervalLateSeconds = 2.5f;
+
+	// Brief pause (ACoopMonsterCharacter) between a monster's current target going Downed and it
+	// actually locking onto a new one -- a readable "it hesitates, then re-fixates" beat rather than
+	// an instant retarget.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Monster")
+	float MonsterFixateSwitchDelaySeconds = 0.5f;
+
+	// Not itemized in the Build 1 plan's own M11 constant list, but required to give
+	// ACoopMonsterCharacter's "simple attack" (per the plan's own build-item wording) any actual
+	// numbers -- same "found it was needed, added it" precedent as most prior milestones. Monster
+	// attacks are abstracted as a periodic direct ApplyDamage tick against the current target (no
+	// physical projectile actor, no range check) -- a documented simplification matching Shield's
+	// own "negates all incoming damage, not just directional" precedent (CoopHealthComponent.cpp).
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Monster")
+	float MonsterAttackDamage = 5.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Monster")
+	float MonsterAttackIntervalSeconds = 2.0f;
 };
