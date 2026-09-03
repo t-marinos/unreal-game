@@ -52,4 +52,24 @@ private:
 	float MaxPitch = -20.0f;
 	float OrbitYawSpeed = 0.5f;
 	float OrbitPitchSpeed = 0.5f;
+
+	// Edge-detects the right-mouse-button so Tick can hide the cursor the frame RMB goes down and
+	// show it again the frame it comes up (WoW-style: cursor vanishes while you're turning the
+	// camera). Cursor visibility is really a PlayerController concern, but this actor already reads
+	// the exact same RMB state every frame for the orbit, so the toggle lives here rather than
+	// adding a Tick to the controller just for it.
+	bool bWasOrbiting = false;
+
+	// Hiding the cursor is not enough: with GameAndUI + DoNotLock (ACoopPlayerController::BeginPlay)
+	// the hidden OS cursor still tracks the physical mouse during the drag, so on release it would
+	// reappear wherever the drag ended, not where it started (playtest report, 2026-09-03). We
+	// snapshot its viewport position on the press edge and warp it back there on the release edge.
+	// SavedCursor* are only meaningful when bHasSavedCursorPos is true (GetMousePosition can fail if
+	// the cursor wasn't over the viewport at press time).
+	// Known limitation: because the cursor is not locked *during* the drag, a very large sweep can
+	// push it into the viewport edge and stall the orbit until you drag back -- fix that with a
+	// per-tick re-centre only if a playtest actually finds it annoying.
+	bool bHasSavedCursorPos = false;
+	float SavedCursorX = 0.0f;
+	float SavedCursorY = 0.0f;
 };

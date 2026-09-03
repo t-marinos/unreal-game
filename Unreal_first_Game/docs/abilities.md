@@ -51,6 +51,7 @@ it back to a design discussion first.
 - **Reads:** none.
 - **Taught in:** The False King (Scene 3).
 - **Server authority:** tag application and the target's real/fake identity are server-only state; no client ever learns which clone is real before a reveal fires.
+- **Prototype status (2026-09-03):** *castable now — Tank, `E` key, **target-required** (needs a click-selected `ACoopMonsterCharacter` in range, else a centre-screen "Please choose a target" toast). Applies `Status.Broken` for `BrokenDurationSeconds`, shown as `BROKEN` on the target frame. No consumer until Control's Mind Fracture + The False King (Build 2) — until then it just expires. See `DECISIONS.md` "Target-required abilities need a click-selected target".*
 
 ### TBD (1–2 slots)
 - No full spec. PDF prose (Gravity Bridge's narrative: "Tank taunts, Control creates/manipulates safe space...") hints at a **Taunt** (aggro/threat redirect) ability, but it isn't part of a named synergy formula — recorded here as a candidate, not designed.
@@ -146,6 +147,7 @@ it back to a design discussion first.
 - **Writes:** consumes the tag on use (or on window expiry, whichever comes first).
 - **Taught in:** The Heart (Scene 5).
 - **Server authority:** the window check, damage resolution, and tag consumption are all server-only.
+- **Prototype status (2026-09-03):** *castable now — Damage, `Q` key. Retrofitted from an implicit "nearest vulnerable monster" auto-search to **target-required** (click-selected `ACoopMonsterCharacter`). `Status.Vulnerable.Physical` is dev-granted via the `ApplyTestVulnerable` Exec command until The Heart. See `DECISIONS.md` "Target-required abilities need a click-selected target".*
 
 ### Overload — *magic branch of Execution/Overload*
 - **Effect:** Same pattern as `Execution`, but keyed to `Status.Vulnerable.Magic` instead. Reading which branch is open (Physical vs. Magic) and picking correctly under time pressure is the scene's actual test — see `docs/scenes/THE_HEART.md`.
@@ -153,6 +155,7 @@ it back to a design discussion first.
 - **Writes:** consumes the tag on use (or on window expiry).
 - **Taught in:** The Heart (Scene 5).
 - **Server authority:** same as `Execution`.
+- **Prototype status (2026-09-03):** *castable now — Damage, `E` key, **target-required**. `CoopDamageAbilities::ResolveOverload` mirrors `ResolveExecution` exactly (its own `Overload*` constants). No real writer of `Status.Vulnerable.Magic` until The Heart (Scene 5); until then it's dev-granted via the `ApplyTestVulnerableMagic` Exec command (deleted with `ApplyTestVulnerable` when Scene 5 lands). See `DECISIONS.md` "Target-required abilities need a click-selected target".*
 
 ### TBD (1–2 slots)
 - Neither PDF describes Damage's baseline attack kit — only the finisher moment is specced. At least one remaining slot needs to be a normal, non-conditional damage ability so Damage has something to do outside the Execution/Overload window; not designed here.

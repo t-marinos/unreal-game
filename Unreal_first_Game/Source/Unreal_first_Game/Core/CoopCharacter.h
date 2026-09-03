@@ -106,16 +106,28 @@ public:
 	float GetExecutionCooldownEndServerTime() const { return ExecutionCooldownEndServerTime; }
 	void SetExecutionCooldownEndServerTime(float ServerTime) { ExecutionCooldownEndServerTime = ServerTime; }
 
+	// Ability kit expansion: same shape as the five above, for Tank's Armor Break
+	// (CoopTankAbilities::ResolveArmorBreak) and Damage's Overload (CoopDamageAbilities::ResolveOverload).
+	// Every ACoopCharacter carries every ability's cooldown -- role is a runtime PlayerState value,
+	// not a compile-time subclass.
+	float GetArmorBreakCooldownEndServerTime() const { return ArmorBreakCooldownEndServerTime; }
+	void SetArmorBreakCooldownEndServerTime(float ServerTime) { ArmorBreakCooldownEndServerTime = ServerTime; }
+
+	float GetOverloadCooldownEndServerTime() const { return OverloadCooldownEndServerTime; }
+	void SetOverloadCooldownEndServerTime(float ServerTime) { OverloadCooldownEndServerTime = ServerTime; }
+
 	// Build 1: one cast-animation Montage reference per ability, set via BP_PlayerCharacter's CDO
 	// (same content-wiring pattern as every other EditDefaultsOnly asset reference on this class).
-	// Every ACoopCharacter carries all five regardless of the player's current role, same reasoning
-	// as the cooldown fields above -- only the relevant one is ever fetched, by whichever ability
-	// namespace function resolves for that role.
+	// Every ACoopCharacter carries all of them regardless of the player's current role, same
+	// reasoning as the cooldown fields above -- only the relevant one is ever fetched, by whichever
+	// ability namespace function resolves for that role.
 	UAnimMontage* GetShieldCastMontage() const { return ShieldCastMontage; }
 	UAnimMontage* GetSpeedCastMontage() const { return SpeedCastMontage; }
 	UAnimMontage* GetDashCastMontage() const { return DashCastMontage; }
 	UAnimMontage* GetStabilizeCastMontage() const { return StabilizeCastMontage; }
 	UAnimMontage* GetExecutionCastMontage() const { return ExecutionCastMontage; }
+	UAnimMontage* GetArmorBreakCastMontage() const { return ArmorBreakCastMontage; }
+	UAnimMontage* GetOverloadCastMontage() const { return OverloadCastMontage; }
 
 	// Server-only. Plays Montage (via ABP_Unarmed's existing "DefaultSlot" AnimGraphNode_Slot, no
 	// AnimBP changes needed) on every client's copy of this character, including the server's own
@@ -201,6 +213,10 @@ private:
 	float DashCooldownEndServerTime = -1.0f;
 	UPROPERTY(Replicated, VisibleInstanceOnly, Category = "Cooldowns")
 	float ExecutionCooldownEndServerTime = -1.0f;
+	UPROPERTY(Replicated, VisibleInstanceOnly, Category = "Cooldowns")
+	float ArmorBreakCooldownEndServerTime = -1.0f;
+	UPROPERTY(Replicated, VisibleInstanceOnly, Category = "Cooldowns")
+	float OverloadCooldownEndServerTime = -1.0f;
 
 	// Build 1: cast-animation Montages, one per ability, set on BP_PlayerCharacter's CDO. Left
 	// unset (None) is a valid, supported state -- PlayCastMontage no-ops rather than requiring
@@ -219,6 +235,12 @@ private:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
 	TObjectPtr<UAnimMontage> ExecutionCastMontage;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
+	TObjectPtr<UAnimMontage> ArmorBreakCastMontage;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
+	TObjectPtr<UAnimMontage> OverloadCastMontage;
 
 	// Build 1: needed for StatusBarHeightOffsetUnits. Every tunable lives in DA_GameConstants per
 	// CLAUDE.md §10 -- set via BP_PlayerCharacter's CDO, same CDO-persistence pattern (and the same

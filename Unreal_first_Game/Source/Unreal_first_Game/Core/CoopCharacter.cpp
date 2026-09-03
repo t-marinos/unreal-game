@@ -3,6 +3,7 @@
 #include "Core/CoopDownedComponent.h"
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/GameStateBase.h"
+#include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/SphereComponent.h"
 #include "Components/WidgetComponent.h"
@@ -37,6 +38,22 @@ ACoopCharacter::ACoopCharacter()
 void ACoopCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Cursor-targeting feature (DECISIONS.md "Cursor + click-to-target, target frame, party frames"):
+	// ACoopPlayerController::SelectTargetUnderCursor traces GetHitResultUnderCursor(ECC_Visibility),
+	// so a teammate is only click-targetable if some component on it BLOCKS the Visibility channel.
+	// ACharacter's capsule uses the Pawn collision profile (Visibility -> Ignore) and BP_PlayerCharacter
+	// stores that as an explicit "Custom" override, so without this a click passes straight through
+	// allies to the floor and clears the target instead. Monsters already work -- their static mesh
+	// uses the BlockAllDynamic profile (blocks Visibility). Done here in BeginPlay, not the
+	// constructor, because BP_PlayerCharacter's serialized component data would re-apply its
+	// Visibility=Ignore override on top of a constructor setting; a runtime call is the last word.
+	// The capsule is the click volume (WoW-style) -- the skeletal mesh stays non-colliding. Camera
+	// collision is unaffected: the orbit spring arm probes ECC_Camera, which the capsule still ignores.
+	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+	{
+		Capsule->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+	}
 
 	// Covers the server (PlayerState is already valid by the time BeginPlay runs, since
 	// possession happens first) and the locally controlled client's first frame. Remote
@@ -162,6 +179,8 @@ void ACoopCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	DOREPLIFETIME_CONDITION(ACoopCharacter, SpeedCooldownEndServerTime, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(ACoopCharacter, DashCooldownEndServerTime, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(ACoopCharacter, ExecutionCooldownEndServerTime, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(ACoopCharacter, ArmorBreakCooldownEndServerTime, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(ACoopCharacter, OverloadCooldownEndServerTime, COND_OwnerOnly);
 }
 
 FLinearColor ACoopCharacter::GetColorForPlayerId(int32 PlayerId)

@@ -88,32 +88,16 @@ void UCoopRoleSelectWidget::NativeTick(const FGeometry& MyGeometry, float InDelt
 	const ACoopGameState* GameState = Cast<ACoopGameState>(UGameplayStatics::GetGameState(this));
 	const bool bRoleSelectActive = GameState && GameState->GetCurrentPhase() == EMatchPhase::RoleSelect;
 
-	// The rest of the match runs in Game-Only input with a hidden cursor -- the mouse drives the
-	// orbit camera (CLAUDE.md §5). RoleSelect is the one screen a player has to *click* something,
-	// so while it's active the local player needs a visible cursor + UI input; then it must switch
-	// back so gameplay isn't left with a stuck cursor. Purely local input handling -- no gameplay
-	// state, no replication (CLAUDE.md §4.2). bShowMouseCursor doubles as the "already switched"
-	// flag so this only runs on the two phase edges, not every frame -- nothing else in the project
-	// touches bShowMouseCursor.
-	if (APlayerController* PC = GetOwningPlayer())
-	{
-		if (bRoleSelectActive && !PC->bShowMouseCursor)
-		{
-			PC->SetShowMouseCursor(true);
-			FInputModeGameAndUI InputMode;
-			InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-			InputMode.SetHideCursorDuringCapture(false);
-			PC->SetInputMode(InputMode);
-		}
-		else if (!bRoleSelectActive && PC->bShowMouseCursor)
-		{
-			PC->SetShowMouseCursor(false);
-			PC->SetInputMode(FInputModeGameOnly());
-		}
-	}
+	// The mouse cursor + FInputModeGameAndUI are set up once, for the whole match, in
+	// ACoopPlayerController::BeginPlay (the cursor-targeting feature -- cursor_progress.md /
+	// DECISIONS.md). This widget used to own that: it flipped the cursor on for RoleSelect and off
+	// again afterward, using PlayerController::bShowMouseCursor as an "already switched" sentinel.
+	// The cursor is always on now, so that block was removed -- RoleSelect's buttons stay clickable
+	// because GameAndUI is already active. If cursor ownership ever moves back here, re-read the
+	// DECISIONS.md entry first.
 
-	// Everything below is the per-row button feedback; the panel is Collapsed outside RoleSelect
-	// (GetRoleSelectVisibility) but NativeTick still fires, so bail once the cursor is handled.
+	// The panel is Collapsed outside RoleSelect (GetRoleSelectVisibility) but NativeTick still fires;
+	// bail so the per-row button feedback below only runs while the phase is active.
 	if (!bRoleSelectActive)
 	{
 		return;

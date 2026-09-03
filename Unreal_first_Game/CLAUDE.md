@@ -348,6 +348,13 @@ primary failure mode for this project. If you believe a refactor is needed, say 
   attached to the actor and billboarded to camera.
 - UI is built in **UMG**, Unreal's native UI system — no third-party UI plugin unless it earns
   itself. Keep layouts simple; this replaces the old "plain HTML/CSS over canvas" rule.
+- **A mouse cursor is visible for the whole match and clicking a unit selects it (local-only, never
+  replicated).** A top-left target frame plus an always-on 5-row party frame show the selected/party
+  units' name, role, HP bar and status; a flat coloured ground ring (green ally / red enemy) marks
+  the selected unit — that ring is §5's "coloured ring on the ground", not the forbidden selection
+  outline (which needs post-processing). See `DECISIONS.md`'s "Cursor + click-to-target, target
+  frame, party frames (WoW-style)" entry — reversible the same way the camera/Mannequin reversals
+  above are.
 - Telegraphs are flat decals on the ground. Attacks are damage volumes (simple collision
   shapes/traces), not particle-driven hit detection.
 - Everything readable, nothing pretty. If it looks good, we over-invested.

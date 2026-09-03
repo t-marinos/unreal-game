@@ -31,6 +31,13 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI")
 	float MatchTimerDisplayUpdateIntervalSeconds = 0.1f;
 
+	// Ability kit expansion: how long UCoopToastWidget shows a centre-screen message
+	// ("Please choose a target") before it has fully faded back out. A local cosmetic display
+	// duration, not a gameplay timer -- but it is a tunable "duration", so it lives here per
+	// CLAUDE.md §10 rather than being hardcoded in the widget.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI")
+	float ToastDurationSeconds = 2.0f;
+
 	// WoW-style movement (DECISIONS.md's "Camera follows the player" entry): multiplies the
 	// backward-movement input axis in BP_PlayerCharacter's Move function, so walking backward is
 	// slower than forward/strafing -- see ACoopCharacter::GetBackpedalSpeedMultiplier.
@@ -156,10 +163,35 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Abilities")
 	float ExecutionDamageAmount = 100.0f;
 
-	// Dev/test only (ACoopPlayerController::ApplyTestVulnerable) -- grants the nearest
-	// ACoopMonsterCharacter Status.Vulnerable.Physical, since nothing else writes that tag until
-	// Scene 5 ("The Heart", Build 2) exists. Lets Execution actually be tested now. Same
-	// "ApplyTestDamage" precedent, not a real gameplay ability.
+	// Ability kit expansion: Tank Armor Break (CoopTankAbilities::ResolveArmorBreak). Cooldown, cast
+	// range against the click-selected ACoopMonsterCharacter, and how long Status.Broken persists
+	// once applied. docs/abilities.md calls Broken a "short window" -- deliberately shorter than
+	// Fortress's 8s. Nothing reads Status.Broken until Control's Mind Fracture (Build 2) exists.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Abilities")
+	float ArmorBreakCooldownSeconds = 10.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Abilities")
+	float ArmorBreakCastRangeUnits = 800.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Abilities")
+	float BrokenDurationSeconds = 6.0f;
+
+	// Ability kit expansion: Damage Overload (CoopDamageAbilities::ResolveOverload) -- the magic
+	// branch of Execution/Overload. Mirrors Execution's numbers by design: same cooldown, cast range
+	// against a Status.Vulnerable.Magic-holding ACoopMonsterCharacter, and flat damage on a hit.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Abilities")
+	float OverloadCooldownSeconds = 6.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Abilities")
+	float OverloadCastRangeUnits = 400.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Abilities")
+	float OverloadDamageAmount = 100.0f;
+
+	// Dev/test only (ACoopPlayerController::ApplyTestVulnerable / ApplyTestVulnerableMagic) -- grants
+	// the nearest ACoopMonsterCharacter Status.Vulnerable.Physical / .Magic, since nothing else
+	// writes those tags until Scene 5 ("The Heart", Build 2) exists. Lets Execution / Overload
+	// actually be tested now. Same "ApplyTestDamage" precedent, not a real gameplay ability.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Abilities")
 	float TestVulnerableDurationSeconds = 6.0f;
 
@@ -248,4 +280,15 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Monster")
 	float MonsterAttackIntervalSeconds = 2.0f;
+
+	// Cursor-targeting feature (cursor_progress.md): the flat ground ring under the click-selected
+	// target (ACoopTargetRing / M_TargetRing). Ring radius in world units (the plane mesh is scaled
+	// to match), and how far below the target actor's origin to drop the ring so it sits on the
+	// floor -- ~88 is the stock Mannequin capsule half-height, same basis as
+	// StatusBarHeightOffsetUnits above. Eyeball both in PIE.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Targeting")
+	float TargetRingRadiusUnits = 90.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Targeting")
+	float TargetRingGroundOffsetUnits = 88.0f;
 };

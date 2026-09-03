@@ -7,6 +7,7 @@
 
 class UGameConstants;
 class ACoopOrbitCamera;
+class ACoopTargetRing;
 class UUserWidget;
 
 // Server RPCs and Exec commands are PlayerController responsibilities in Unreal (each player has
@@ -112,11 +113,50 @@ public:
 	void Server_ActivateDash();
 
 	// Bound to IA_Execution. Damage-only -- CoopDamageAbilities::ResolveExecution.
+	// TARGET-REQUIRED (DECISIONS.md "Target-required abilities need a click-selected target"): the
+	// wrapper reads GetCurrentTargetActor(); null -> ShowToast("Please choose a target") and RETURN
+	// without sending the RPC; non-null -> Server_ActivateExecution(Target), which re-validates.
 	UFUNCTION(BlueprintCallable, Category = "Abilities")
 	void ActivateExecution();
 
 	UFUNCTION(Server, Reliable)
-	void Server_ActivateExecution();
+	void Server_ActivateExecution(AActor* Target);
+
+	// Ability kit expansion. Bound to IA_ArmorBreak (E). Tank-only. Same thin-wrapper /
+	// target-required shape as ActivateExecution -- see DECISIONS.md. Resolves in
+	// CoopTankAbilities::ResolveArmorBreak.
+	UFUNCTION(BlueprintCallable, Category = "Abilities")
+	void ActivateArmorBreak();
+
+	UFUNCTION(Server, Reliable)
+	void Server_ActivateArmorBreak(AActor* Target);
+
+	// Ability kit expansion. Bound to IA_Overload (E). Damage-only. Same target-required shape.
+	// Resolves in CoopDamageAbilities::ResolveOverload. IA_ArmorBreak and IA_Overload share the E
+	// key: harmless, every Server_Activate* is role-gated and no-ops for the wrong role -- same
+	// pattern that puts all five first abilities on Q (DECISIONS.md "The Q ability per role").
+	UFUNCTION(BlueprintCallable, Category = "Abilities")
+	void ActivateOverload();
+
+	UFUNCTION(Server, Reliable)
+	void Server_ActivateOverload(AActor* Target);
+
+	// Ability kit expansion. Local, cosmetic (CLAUDE.md §4.2): shows a centre-screen message via
+	// UCoopToastWidget. Called from the target-required ability wrappers when the ability is pressed
+	// with no target selected. Not replicated -- each client's own missed-input feedback.
+	void ShowToast(const FText& Message);
+
+	FText GetPendingToastText() const { return PendingToastText; }
+	float GetPendingToastStartTime() const { return PendingToastStartTime; }
+
+	// Dev/test only (CLAUDE.md §7), mirror of ApplyTestVulnerable: grants the nearest
+	// ACoopMonsterCharacter Status.Vulnerable.Magic so Overload can be tested before "The Heart"
+	// (Scene 5) exists. DELETE both when that scene lands, alongside ApplyTestVulnerable.
+	UFUNCTION(Exec)
+	void ApplyTestVulnerableMagic();
+
+	UFUNCTION(Server, Reliable)
+	void Server_ApplyTestVulnerableMagic();
 
 	// Dev/test only (CLAUDE.md §7), same shape as ApplyTestDamage: grants the nearest
 	// ACoopMonsterCharacter Status.Vulnerable.Physical so Execution (which has no real tag-writer
@@ -126,6 +166,33 @@ public:
 
 	UFUNCTION(Server, Reliable)
 	void Server_ApplyTestVulnerable();
+
+	// Cursor-targeting feature (cursor_progress.md). PURELY LOCAL, cosmetic UI state (CLAUDE.md
+	// §4.2): "what this player has clicked on". Never replicated, never sent to the server. The
+	// target frame / party frame widgets (UCoopUnitFrameWidget) and the ground ring
+	// (ACoopTargetRing) read this to decide what to draw; nothing gameplay-side reads it -- the five
+	// abilities keep their own implicit nearest-X targeting. A future phase may route this into the
+	// Server_Activate* RPCs as *intent* (server re-validates); this getter is that seam.
+	AActor* GetCurrentTargetActor() const { return CurrentTargetActor.Get(); }
+
+	// Set the current target directly, no cursor trace. Used by UCoopUnitFrameWidget when a
+	// party-frame row is left-clicked -- the row already knows which teammate actor it's showing.
+	// Same local-only / no-RPC / not-replicated contract as SelectTargetUnderCursor, and re-applies
+	// the same ACoopCharacter / ACoopMonsterCharacter accept-filter so a stray caller can't stuff in
+	// something nonsensical. A null / rejected NewTarget leaves the existing target untouched (use
+	// ClearTarget() to clear).
+	void SetCurrentTarget(AActor* NewTarget);
+
+	// Bound to IA_Select (left mouse button) via BP_PlayerCharacter's EventGraph, same wiring shape
+	// as the ability inputs. Deprojects the cursor; if it lands on an ACoopCharacter or an
+	// ACoopMonsterCharacter that becomes the current target, otherwise the target is cleared
+	// (cursor_progress.md decision #2). Local-only -- no RPC, no replicated state written.
+	UFUNCTION(BlueprintCallable, Category = "Targeting")
+	void SelectTargetUnderCursor();
+
+	// Also bound to a key (Esc) in BP. Clears the current target.
+	UFUNCTION(BlueprintCallable, Category = "Targeting")
+	void ClearTarget();
 
 protected:
 	virtual void BeginPlay() override;
@@ -176,4 +243,54 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UUserWidget> ActionBarWidget;
+
+	// Cursor-targeting feature (cursor_progress.md): the top-left single target frame (WBP_TargetFrame)
+	// and the always-on 5-row party stack (WBP_PartyFrame). Same create-once-in-BeginPlay /
+	// leave-in-viewport pattern as the widgets above; each UCoopUnitFrameWidget row self-gates via
+	// RenderOpacity (phase + "is there anything to show").
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UUserWidget> TargetFrameWidgetClass;
+
+	UPROPERTY()
+	TObjectPtr<UUserWidget> TargetFrameWidget;
+
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UUserWidget> PartyFrameWidgetClass;
+
+	UPROPERTY()
+	TObjectPtr<UUserWidget> PartyFrameWidget;
+
+	// Ability kit expansion: WBP_Toast, the centre-screen "Please choose a target" message. Same
+	// create-once-in-BeginPlay / leave-in-viewport pattern as every widget above; UCoopToastWidget
+	// reads PendingToast* below in its own NativeTick and fades itself via RenderOpacity.
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UUserWidget> ToastWidgetClass;
+
+	UPROPERTY()
+	TObjectPtr<UUserWidget> ToastWidget;
+
+	// Local, non-replicated toast state -- what UCoopToastWidget::NativeTick reads. StartTime is
+	// GetWorld()->GetTimeSeconds() at the ShowToast() call; -1 means "nothing shown yet".
+	FText PendingToastText;
+	float PendingToastStartTime = -1.0f;
+
+	// Client-side "is this ability off cooldown?" check for the pre-RPC "Ability not ready" toast in
+	// the Activate*() wrappers. Reads the owning pawn's COND_OwnerOnly-replicated
+	// *CooldownEndServerTime vs. GetServerWorldTimeSeconds() -- the same value the action-bar sweep
+	// reads. The server still enforces the cooldown authoritatively inside every Resolve*/Apply*.
+	bool IsAbilityReady(float CooldownEndServerTime) const;
+
+	// Cursor-targeting feature. TWeakObjectPtr so a targeted actor being destroyed (a monster dying)
+	// silently null-resolves instead of dangling -- the widgets and ring treat null as "nothing to
+	// show". NOT a UPROPERTY(Replicated), NO DOREPLIFETIME -- see GetCurrentTargetActor()'s comment.
+	TWeakObjectPtr<AActor> CurrentTargetActor;
+
+	// Local-only ground ring under the current target (cursor_progress.md). Spawned in BeginPlay
+	// alongside OrbitCamera, only on the controlling machine. Class is content-wired on
+	// BP_PlayerController's CDO (typically BP_TargetRing); unset simply means "no ring".
+	UPROPERTY(EditDefaultsOnly, Category = "Targeting")
+	TSubclassOf<ACoopTargetRing> TargetRingClass;
+
+	UPROPERTY()
+	TObjectPtr<ACoopTargetRing> TargetRing;
 };

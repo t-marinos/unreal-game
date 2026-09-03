@@ -10,6 +10,7 @@
 #include "GameFramework/GameStateBase.h"
 #include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
 
 namespace
 {
@@ -18,35 +19,51 @@ namespace
 		FText Name;
 		FLinearColor TileColor;
 		bool bImplemented = false;
+		FText Description;
 	};
 
-	// Per-role action-bar kit. Names duplicated from CoopAbilityCardWidget's table (which keeps the
-	// long descriptions -- the bar only needs name + tile colour + castable-flag). A deliberate
-	// ~11-string duplication, not a refactor of a verified widget (CLAUDE.md §4.8, §1 "hardcoded is
-	// correct"). Only slot 0 of each role is bImplemented -- the one Q maps to.
+	// Per-role action-bar kit -- the sole home of the ability name + one-line description strings now
+	// that the prep-arena ability cards (WBP_AbilityCard / UCoopAbilityCardWidget) are deleted. The
+	// bar tile shows the name; the hover tooltip (UCoopActionBarWidget) shows both. Hardcoded UI
+	// display data, not gameplay resolution -- CLAUDE.md §4.6's "no generic ability system" doesn't
+	// apply (same reasoning the cards used). bImplemented slots: slot 0 (the Q ability) for every
+	// role, plus Tank slot 1 (Armor Break, E) and Damage slot 1 (Overload, E) from the ability kit
+	// expansion.
 	const TArray<FCoopAbilitySlotInfo>& GetKitForRole(EPlayerRole Role)
 	{
 		static const TArray<FCoopAbilitySlotInfo> Tank = {
-			{ NSLOCTEXT("CoopAbilitySlot", "Shield", "Shield"),               FLinearColor(0.20f, 0.40f, 0.65f), true  },
-			{ NSLOCTEXT("CoopAbilitySlot", "ArmorBreak", "Armor Break"),      FLinearColor(0.55f, 0.30f, 0.12f), false },
+			{ NSLOCTEXT("CoopAbilitySlot", "Shield", "Shield"),               FLinearColor(0.20f, 0.40f, 0.65f), true,
+			  NSLOCTEXT("CoopAbilitySlot", "ShieldDesc", "Raise a barrier in front of you that blocks damage from that direction.") },
+			{ NSLOCTEXT("CoopAbilitySlot", "ArmorBreak", "Armor Break"),      FLinearColor(0.55f, 0.30f, 0.12f), true,
+			  NSLOCTEXT("CoopAbilitySlot", "ArmorBreakDesc", "Mark a target, opening a brief window for Control to act on it.") },
 		};
 		static const TArray<FCoopAbilitySlotInfo> Support = {
-			{ NSLOCTEXT("CoopAbilitySlot", "Speed", "Speed"),                 FLinearColor(0.15f, 0.52f, 0.42f), true  },
-			{ NSLOCTEXT("CoopAbilitySlot", "Link", "Link"),                   FLinearColor(0.40f, 0.25f, 0.55f), false },
+			{ NSLOCTEXT("CoopAbilitySlot", "Speed", "Speed"),                 FLinearColor(0.15f, 0.52f, 0.42f), true,
+			  NSLOCTEXT("CoopAbilitySlot", "SpeedDesc", "Grant a teammate a burst of movement speed.") },
+			{ NSLOCTEXT("CoopAbilitySlot", "Link", "Link"),                   FLinearColor(0.40f, 0.25f, 0.55f), false,
+			  NSLOCTEXT("CoopAbilitySlot", "LinkDesc", "Bond yourself to a teammate -- the seed of a wider network.") },
 		};
 		static const TArray<FCoopAbilitySlotInfo> Runner = {
-			{ NSLOCTEXT("CoopAbilitySlot", "Dash", "Dash"),                   FLinearColor(0.42f, 0.52f, 0.15f), true  },
-			{ NSLOCTEXT("CoopAbilitySlot", "Carry", "Carry"),                 FLinearColor(0.45f, 0.35f, 0.22f), false },
-			{ NSLOCTEXT("CoopAbilitySlot", "Chain", "Chain"),                 FLinearColor(0.35f, 0.40f, 0.48f), false },
+			{ NSLOCTEXT("CoopAbilitySlot", "Dash", "Dash"),                   FLinearColor(0.42f, 0.52f, 0.15f), true,
+			  NSLOCTEXT("CoopAbilitySlot", "DashDesc", "A short dash. Stronger if a teammate has buffed your speed.") },
+			{ NSLOCTEXT("CoopAbilitySlot", "Carry", "Carry"),                 FLinearColor(0.45f, 0.35f, 0.22f), false,
+			  NSLOCTEXT("CoopAbilitySlot", "CarryDesc", "Pick up and carry an object.") },
+			{ NSLOCTEXT("CoopAbilitySlot", "Chain", "Chain"),                 FLinearColor(0.35f, 0.40f, 0.48f), false,
+			  NSLOCTEXT("CoopAbilitySlot", "ChainDesc", "Fire a tether that pulls you or a target.") },
 		};
 		static const TArray<FCoopAbilitySlotInfo> Control = {
-			{ NSLOCTEXT("CoopAbilitySlot", "Stabilize", "Stabilize"),         FLinearColor(0.25f, 0.30f, 0.60f), true  },
-			{ NSLOCTEXT("CoopAbilitySlot", "MindFracture", "Mind Fracture"),  FLinearColor(0.55f, 0.20f, 0.45f), false },
-			{ NSLOCTEXT("CoopAbilitySlot", "Channel", "Channel"),             FLinearColor(0.15f, 0.45f, 0.55f), false },
+			{ NSLOCTEXT("CoopAbilitySlot", "Stabilize", "Stabilize"),         FLinearColor(0.25f, 0.30f, 0.60f), true,
+			  NSLOCTEXT("CoopAbilitySlot", "StabilizeDesc", "Cast on a shielded teammate to upgrade their shield for the whole team.") },
+			{ NSLOCTEXT("CoopAbilitySlot", "MindFracture", "Mind Fracture"),  FLinearColor(0.55f, 0.20f, 0.45f), false,
+			  NSLOCTEXT("CoopAbilitySlot", "MindFractureDesc", "Cast on a marked target to reveal the truth.") },
+			{ NSLOCTEXT("CoopAbilitySlot", "Channel", "Channel"),             FLinearColor(0.15f, 0.45f, 0.55f), false,
+			  NSLOCTEXT("CoopAbilitySlot", "ChannelDesc", "Cast on a bonded pair to spread the link to the whole team.") },
 		};
 		static const TArray<FCoopAbilitySlotInfo> Damage = {
-			{ NSLOCTEXT("CoopAbilitySlot", "Execution", "Execution"),         FLinearColor(0.62f, 0.16f, 0.20f), true  },
-			{ NSLOCTEXT("CoopAbilitySlot", "Overload", "Overload"),           FLinearColor(0.45f, 0.20f, 0.55f), false },
+			{ NSLOCTEXT("CoopAbilitySlot", "Execution", "Execution"),         FLinearColor(0.62f, 0.16f, 0.20f), true,
+			  NSLOCTEXT("CoopAbilitySlot", "ExecutionDesc", "A finishing strike -- only lands while the target is physically vulnerable.") },
+			{ NSLOCTEXT("CoopAbilitySlot", "Overload", "Overload"),           FLinearColor(0.45f, 0.20f, 0.55f), true,
+			  NSLOCTEXT("CoopAbilitySlot", "OverloadDesc", "A finishing strike -- only lands while the target is magically vulnerable.") },
 		};
 		static const TArray<FCoopAbilitySlotInfo> Empty;
 
@@ -85,7 +102,24 @@ EPlayerRole UCoopAbilitySlotWidget::GetLocalPlayerRole() const
 	return PS ? PS->GetRole() : EPlayerRole::Unassigned;
 }
 
-float UCoopAbilitySlotWidget::GetSlotZeroCooldownEndServerTime(EPlayerRole Role) const
+FText UCoopAbilitySlotWidget::GetAbilityName() const
+{
+	const TArray<FCoopAbilitySlotInfo>& Kit = GetKitForRole(GetLocalPlayerRole());
+	return Kit.IsValidIndex(SlotIndex) ? Kit[SlotIndex].Name : FText::GetEmpty();
+}
+
+FText UCoopAbilitySlotWidget::GetAbilityDescription() const
+{
+	const TArray<FCoopAbilitySlotInfo>& Kit = GetKitForRole(GetLocalPlayerRole());
+	return Kit.IsValidIndex(SlotIndex) ? Kit[SlotIndex].Description : FText::GetEmpty();
+}
+
+bool UCoopAbilitySlotWidget::HasAbilityEntry() const
+{
+	return GetKitForRole(GetLocalPlayerRole()).IsValidIndex(SlotIndex);
+}
+
+float UCoopAbilitySlotWidget::GetSlotCooldownEndServerTime(EPlayerRole Role, int32 InSlotIndex) const
 {
 	const APlayerController* PC = GetOwningPlayer();
 	const ACoopCharacter* Char = PC ? Cast<ACoopCharacter>(PC->GetPawn()) : nullptr;
@@ -93,37 +127,72 @@ float UCoopAbilitySlotWidget::GetSlotZeroCooldownEndServerTime(EPlayerRole Role)
 	{
 		return -1.0f;
 	}
-	switch (Role)
+	// One explicit (Role, slot) case -- no generic map (CLAUDE.md §4.6). Slot 0 is every role's Q
+	// ability; slot 1 currently exists only for Tank (Armor Break) and Damage (Overload).
+	if (InSlotIndex == 0)
 	{
-		case EPlayerRole::Tank:    return Char->GetShieldCooldownEndServerTime();
-		case EPlayerRole::Support: return Char->GetSpeedCooldownEndServerTime();
-		case EPlayerRole::Runner:  return Char->GetDashCooldownEndServerTime();
-		case EPlayerRole::Control: return Char->GetStabilizeCooldownEndServerTime();
-		case EPlayerRole::Damage:  return Char->GetExecutionCooldownEndServerTime();
-		default:                   return -1.0f;
+		switch (Role)
+		{
+			case EPlayerRole::Tank:    return Char->GetShieldCooldownEndServerTime();
+			case EPlayerRole::Support: return Char->GetSpeedCooldownEndServerTime();
+			case EPlayerRole::Runner:  return Char->GetDashCooldownEndServerTime();
+			case EPlayerRole::Control: return Char->GetStabilizeCooldownEndServerTime();
+			case EPlayerRole::Damage:  return Char->GetExecutionCooldownEndServerTime();
+			default:                   return -1.0f;
+		}
 	}
+	if (InSlotIndex == 1)
+	{
+		switch (Role)
+		{
+			case EPlayerRole::Tank:   return Char->GetArmorBreakCooldownEndServerTime();
+			case EPlayerRole::Damage: return Char->GetOverloadCooldownEndServerTime();
+			default:                  return -1.0f;
+		}
+	}
+	return -1.0f;
 }
 
-float UCoopAbilitySlotWidget::GetSlotZeroCooldownDurationSeconds(EPlayerRole Role) const
+float UCoopAbilitySlotWidget::GetSlotCooldownDurationSeconds(EPlayerRole Role, int32 InSlotIndex) const
 {
 	if (!GameConstants)
 	{
 		return 0.0f;
 	}
-	switch (Role)
+	if (InSlotIndex == 0)
 	{
-		case EPlayerRole::Tank:    return GameConstants->ShieldCooldownSeconds;
-		case EPlayerRole::Support: return GameConstants->SpeedCooldownSeconds;
-		case EPlayerRole::Runner:  return GameConstants->DashCooldownSeconds;
-		case EPlayerRole::Control: return GameConstants->StabilizeCooldownSeconds;
-		case EPlayerRole::Damage:  return GameConstants->ExecutionCooldownSeconds;
-		default:                   return 0.0f;
+		switch (Role)
+		{
+			case EPlayerRole::Tank:    return GameConstants->ShieldCooldownSeconds;
+			case EPlayerRole::Support: return GameConstants->SpeedCooldownSeconds;
+			case EPlayerRole::Runner:  return GameConstants->DashCooldownSeconds;
+			case EPlayerRole::Control: return GameConstants->StabilizeCooldownSeconds;
+			case EPlayerRole::Damage:  return GameConstants->ExecutionCooldownSeconds;
+			default:                   return 0.0f;
+		}
 	}
+	if (InSlotIndex == 1)
+	{
+		switch (Role)
+		{
+			case EPlayerRole::Tank:   return GameConstants->ArmorBreakCooldownSeconds;
+			case EPlayerRole::Damage: return GameConstants->OverloadCooldownSeconds;
+			default:                  return 0.0f;
+		}
+	}
+	return 0.0f;
 }
 
 void UCoopAbilitySlotWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
+
+	// Pure geometry poll for the hover tooltip -- the bar and every slot are HitTestInvisible so
+	// there is no Slate hover event (that is deliberate: the cursor must fall through to the
+	// right-click camera drag, CLAUDE.md §5 / DECISIONS.md's WoW action bar entry).
+	// GetMousePositionOnPlatform() (UMG, no extra module dep) is absolute desktop space, which is
+	// what FGeometry::IsUnderLocation expects. UCoopActionBarWidget reads bCursorOver each tick.
+	bCursorOver = MyGeometry.IsUnderLocation(UWidgetLayoutLibrary::GetMousePositionOnPlatform());
 
 	const EPlayerRole Role = GetLocalPlayerRole();
 	const TArray<FCoopAbilitySlotInfo>& Kit = GetKitForRole(Role);
@@ -167,22 +236,23 @@ void UCoopAbilitySlotWidget::NativeTick(const FGeometry& MyGeometry, float InDel
 	}
 	if (KeybindText)
 	{
-		// Every ability is bound to Q by design (DECISIONS.md); only the implemented slot-0 one
-		// actually does anything, so only it gets a badge.
-		const bool bShowKey = (SlotIndex == 0 && Info.bImplemented);
-		KeybindText->SetText(FText::FromString(TEXT("Q")));
+		// Slot 0 is bound to Q for every role, slot 1 to E (Tank Armor Break / Damage Overload) --
+		// DECISIONS.md "The Q ability per role" + the ability kit expansion. Only an implemented
+		// slot gets a badge.
+		const bool bShowKey = Info.bImplemented && (SlotIndex == 0 || SlotIndex == 1);
+		KeybindText->SetText(FText::FromString(SlotIndex == 0 ? TEXT("Q") : TEXT("E")));
 		KeybindText->SetVisibility(bShowKey ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	}
 
-	// --- Cooldown sweep: implemented slot-0 only ---
+	// --- Cooldown sweep: any implemented slot ---
 	float Progress = 0.0f;
 	int32 SecondsLeft = 0;
-	if (SlotIndex == 0 && Info.bImplemented)
+	if (Info.bImplemented)
 	{
 		const AGameStateBase* GS = UGameplayStatics::GetGameState(this);
 		const float Now = GS ? GS->GetServerWorldTimeSeconds() : 0.0f;
-		const float End = GetSlotZeroCooldownEndServerTime(Role);
-		const float Duration = GetSlotZeroCooldownDurationSeconds(Role);
+		const float End = GetSlotCooldownEndServerTime(Role, SlotIndex);
+		const float Duration = GetSlotCooldownDurationSeconds(Role, SlotIndex);
 		const float Remaining = End - Now;
 		if (Remaining > 0.0f && Duration > 0.0f)
 		{

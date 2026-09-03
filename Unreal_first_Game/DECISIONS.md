@@ -501,8 +501,13 @@ follow-up above — it is not optional plumbing, `bMirror` alone does nothing in
 | SUPPORT | Speed | `CoopSupportAbilities::ApplySpeed` | — | `Status.SpeedBuff` (nearest other `ACoopCharacter`) |
 | RUNNER | Dash | `CoopRunnerAbilities::ResolveDash` | `Status.SpeedBuff` (checks, doesn't consume) | — (`LaunchCharacter` impulse; boosted if buff held) |
 | CONTROL | Stabilize | `CoopControlAbilities::ResolveStabilize` | `Status.Shielded` | `Status.Fortress` |
-| DAMAGE | Execution | `CoopDamageAbilities::ResolveExecution` | `Status.Vulnerable.Physical` (consumes) | — (deals `ExecutionDamageAmount` to nearest `ACoopMonsterCharacter` holding the tag) |
+| DAMAGE | Execution | `CoopDamageAbilities::ResolveExecution` | `Status.Vulnerable.Physical` (consumes) | — (deals `ExecutionDamageAmount` to the **click-selected** `ACoopMonsterCharacter` if it holds the tag & is in range) |
 
+- **Execution was retrofitted 2026-09-03 to take a click-selected target** instead of its original
+  "nearest `ACoopMonsterCharacter` holding the tag" auto-search — `Server_ActivateExecution(AActor*
+  Target)` now, gated client-side on `GetCurrentTargetActor()`. Speed and Stabilize were deliberately
+  **not** retrofitted (they keep their auto-search). See "Target-required abilities need a
+  click-selected target" below for the full reasoning.
 - **"Q ability" = each role's first-listed ability in `docs/abilities.md`.** That doc has no keybind
   notation anywhere; this mapping was inferred from listing order and confirmed with the user.
 - **Tank's Shield moved from E to Q** (explicit user choice). `E` is now mapped to nothing in
@@ -538,6 +543,10 @@ Without a tag-writer, Damage's Execution would be permanently uncastable and unt
 nearest `ACoopMonsterCharacter` within `TestVulnerableRangeUnits` the tag for
 `TestVulnerableDurationSeconds` — same "ApplyTestDamage" precedent already in the controller. **Delete
 this when Scene 5 lands** and a real mechanic writes the tag.
+
+- **Addendum (2026-09-03): a twin `ApplyTestVulnerableMagic` / `Server_ApplyTestVulnerableMagic` Exec
+  pair was added** for the same reason, granting `Status.Vulnerable.Magic` so Damage's new **Overload**
+  ability is testable before "The Heart" exists. **Delete BOTH stubs together when Scene 5 lands.**
 
 **Monsters got minimal tag support for this.** `ACoopMonsterCharacter` gained
 `HasStatusTag`/`ApplyStatusTag`/`RemoveStatusTag` (a trimmed copy of `ACoopCharacter`'s mechanism —
@@ -612,14 +621,16 @@ feedback.
 - The panel's *root visibility* (show only during the `RoleSelect` phase) is a separate gate that
   predates this feature and is unchanged — verified still working (panel is gone the instant the
   phase resolves, doesn't linger over the prep arena).
-- **Mouse cursor + input mode.** The match otherwise runs in `FInputModeGameOnly` with a hidden
-  cursor (mouse drives the orbit camera). RoleSelect is the only screen a player must *click*, so
-  `NativeTick` flips the **local** player into `FInputModeGameAndUI` + visible cursor
-  (`DoNotLock`, `SetHideCursorDuringCapture(false)`) while the phase is active, and back to
-  `FInputModeGameOnly` + hidden cursor when it resolves. It uses `PlayerController::bShowMouseCursor`
-  itself as the "already switched" flag (fires only on the two phase edges) — safe only because
-  nothing else in the project touches `bShowMouseCursor`. Without this the buttons are unclickable
-  (added 2026-09-02 after the first playtest: "I cant see my mouse to click a role").
+- **Mouse cursor + input mode.** ~~The match otherwise runs in `FInputModeGameOnly` with a hidden
+  cursor... `NativeTick` flips the **local** player into `FInputModeGameAndUI` + visible cursor...
+  and back... when it resolves.~~ **STALE as of 2026-09-03 — see "Cursor + click-to-target, target
+  frame, party frames" below.** This per-phase toggle block was **deleted** from
+  `UCoopRoleSelectWidget::NativeTick`: the cursor-targeting feature makes the cursor + `GameAndUI`
+  the whole-match default (owned by `ACoopPlayerController::BeginPlay`), so RoleSelect's buttons
+  stay clickable with no local toggle. The `if (!bRoleSelectActive) return;` feedback bail is all
+  that remains of this block. Original rationale kept for history: added 2026-09-02 after the first
+  playtest ("I cant see my mouse to click a role"), used `bShowMouseCursor` as its own
+  already-switched sentinel.
 
 **Verified (2026-09-02, 5-client PIE):** claim on a client sets that client's server
 `CoopPlayerState.PlayerRole` and flips its button to `YOURS`/disabled; every other client's matching
@@ -743,3 +754,382 @@ left-aligned), instead of the previous name-and-button side-by-side `HorizontalB
 change — the five `OnClicked → ClaimTank/Control/Runner/Support/Damage` bindings and the
 `NativeTick`/`UpdateRoleSlot` name contract (see "RoleSelect screen feedback is `NativeTick`-driven"
 above) are unchanged and were verified intact in 5-client PIE.
+
+## Cursor + click-to-target, target frame, party frames (WoW-style)
+
+**Decision (2026-09-03):** the game now has mouse-cursor unit selection and two always-on
+`UUserWidget` frames, built per `cursor_progress.md` (that file is the plan and the build log;
+this entry is the durable summary). User-requested mini-feature outside strict build order — same
+category as monster combat / the "Q ability" / the WoW-style action bar / the status badge (logged
+deviations, not scope creep). `docs/abilities.md` untouched — no new tag, no new ability.
+
+**What it is:**
+- **A visible OS cursor for the whole match.** `ACoopPlayerController::BeginPlay` (inside its
+  `IsLocalController()` block) sets `SetShowMouseCursor(true)` + `FInputModeGameAndUI`
+  (`DoNotLock`, `SetHideCursorDuringCapture(false)`). This **replaces** `UCoopRoleSelectWidget`'s
+  old per-phase cursor toggle — that block is deleted (see the strike-through in "RoleSelect screen
+  feedback is `NativeTick`-driven"). The `DoNotLock` + `SetHideCursorDuringCapture(false)` combo is
+  what lets `ACoopOrbitCamera`'s right-click-drag orbit (raw mouse delta in its `Tick`) keep
+  working with the cursor shown — RoleSelect already proved that combo.
+- **The cursor hides while right-click is held** (WoW-style: it vanishes while you turn the camera,
+  reappears where it was the instant you let go). `ACoopOrbitCamera::Tick` already reads the RMB
+  state every frame for the orbit, so it edge-detects RMB there and calls
+  `OwningController->SetShowMouseCursor(false/true)` on the two edges only. Cursor visibility is
+  really a controller concern, but co-locating it with the identical RMB check the orbit already
+  does beat adding a `Tick` to the controller for one toggle — and it stays the *only* other writer
+  of `bShowMouseCursor` besides `BeginPlay`'s one-time whole-match "on" (added 2026-09-03 from the
+  first playtest). **Second playtest (2026-09-03) showed hiding alone is not enough:** with
+  `GameAndUI` + `DoNotLock` the *hidden* OS cursor still tracks the physical mouse during the drag,
+  so it reappeared wherever the drag ended, not where it started. Fixed by snapshotting the cursor's
+  viewport position (`GetMousePosition`) on the press edge and warping it back (`SetMouseLocation`)
+  on the release edge. The cursor is still not *locked* during the drag, so a very large sweep can
+  push it to the viewport edge and briefly stall the orbit — left as a noted limitation (a per-tick
+  re-centre) rather than fixed pre-emptively.
+- **Click a unit to target it.** LMB → `IA_Select` (new Input Action, Pressed-only trigger) →
+  mapped in `IMC_Default` → `BP_PlayerCharacter`'s EventGraph (`IA_Select` event → `GetController`
+  → `CastToCoopPlayerController` → `SelectTargetUnderCursor`, same BP-wiring shape as every
+  ability). `ACoopPlayerController::SelectTargetUnderCursor()` does
+  `GetHitResultUnderCursor(ECC_Visibility, ...)`, accepts only `ACoopCharacter` /
+  `ACoopMonsterCharacter`, else clears. Empty click / `Esc` → `ClearTarget()` (WoW keeps the
+  target; clearing is the simpler prototype rule).
+- **A targetable actor must BLOCK the `ECC_Visibility` trace channel** — that's what
+  `GetHitResultUnderCursor(ECC_Visibility)` collides against. Monsters already did
+  (`ACoopMonsterCharacter`'s static `Mesh` uses the `BlockAllDynamic` profile). **Teammates did
+  not**: `ACharacter`'s capsule is the `Pawn` profile (`Visibility → Ignore`) and
+  `BP_PlayerCharacter` stores that as an explicit `Custom` override on `CollisionCylinder`, and
+  `CharacterMesh0` is `QueryOnly` ignoring every trace channel — so a click on an ally passed
+  straight through to the floor and cleared the target (bug found 2026-09-03, first thing the user
+  hit: *"I should be able to click on and target allies ... same as enemies"*). **Fix:**
+  `ACoopCharacter::BeginPlay()` calls
+  `GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block)`. Placed in
+  `BeginPlay`, **not** the constructor — `BP_PlayerCharacter`'s serialized component data re-applies
+  its `Visibility → Ignore` override on top of any constructor setting, so a runtime call is the
+  last word; `BeginPlay` also covers the dev-mode dummy pawns (they spawn from `DefaultPawnClass` =
+  `BP_PlayerCharacter`). The **capsule** is the click volume, WoW-style — the skeletal mesh stays
+  non-colliding. Camera is unaffected: `ACoopOrbitCamera`'s spring arm probes `ECC_Camera`, which
+  the capsule still ignores. Verified 2026-09-03 in PIE: all 5 live characters' capsules block
+  Visibility after `BeginPlay` (the `Ignore` override cleared → reverts to default Block); a
+  straight-down `trace_world` at a character now stops at capsule-top (origin + 90), not the floor.
+- **`CurrentTargetActor` is `TWeakObjectPtr<AActor>` — NOT replicated, no `DOREPLIFETIME`, no RPC.**
+  Selection is "what this local player is looking at", CLAUDE.md §4.2's local/cosmetic/client-only
+  category — each of the five players targets independently, nobody's target touches anyone else's
+  screen (same guarantee as `ACoopOrbitCamera`). A destroyed target silently weak-null-resolves.
+- **`GetCurrentTargetActor()` is the clean seam for target-driven abilities** (a *future* phase,
+  not built): a later phase routes it into the `Server_Activate*` RPCs as *intent*, server
+  re-validates. v1 changes no ability code — the five abilities keep their own implicit
+  nearest-X targeting.
+- **One reusable widget class, `UCoopUnitFrameWidget`** (`Core/CoopUnitFrameWidget.h/.cpp`), drives
+  **both** the single top-left target frame **and** each of the 5 party-stack rows. A per-instance
+  `EUnitFrameSource { CurrentTarget, PartyMember }` + `int32 PartyMemberIndex` decide which actor
+  it reads each `NativeTick`. `CurrentTarget` → `GetOwningPlayer<ACoopPlayerController>()
+  ->GetCurrentTargetActor()`; `PartyMember` → `GameState->PlayerArray[PartyMemberIndex]`'s pawn.
+  `static HealthOf` / `ActorHasTag` handle `ACoopCharacter` **and** `ACoopMonsterCharacter` with an
+  explicit `Cast` each — no shared base (§4.6).
+- **All feedback is `NativeTick` → null-checked `BindWidgetOptional` pointers** (`RootBorder`,
+  `NameText`, `TypeText`, `HealthBar` `UProgressBar`, `HealthText`, `StatusText`). **No Designer
+  "Bind Function" bindings** anywhere (`unreal-mcp` can't author them — see the entry above). Same
+  approach as `UCoopRoleSelectWidget` / `UCoopActionBarWidget`.
+- **Show/hide is a `RenderOpacity` 0/1 toggle, never the widget's own `Visibility`.** The frames
+  are created during the RoleSelect phase with nothing to show; a widget that leaves the "visible"
+  family in its own `NativeTick` freezes forever (the P9 action-bar gotcha). They stay
+  `HitTestInvisible` always. `RenderOpacity` 0 when: phase ∉ {Prep, HoldTheGate}, OR no subject
+  actor, OR the subject has no health component.
+- **The top-left target frame is never interactive; party-stack rows are left-clickable.** The
+  target-frame `UCoopUnitFrameWidget` (`Source == CurrentTarget`) stays `HitTestInvisible` — the
+  cursor falls straight through it. **Party rows** (`Source == PartyMember`) got click-to-target
+  (2026-09-03, from the first playtest — *"when clicking on the party frames, the selected team
+  member needs to be shown in the top left"*), which **revises the original "frames are never
+  interactive / rows are display-only" call:**
+  - `UCoopUnitFrameWidget::NativeOnMouseButtonDown` — **left**-click on a party row with a live
+    subject → `ACoopPlayerController::SetCurrentTarget(that teammate's pawn)` → `FReply::Handled`.
+    **Right-click and every other case return `Unhandled`**, so the right-click-drag orbit camera
+    still works with the mouse anywhere over the party frame — decision #7's *intent* (frames never
+    steal the camera drag) is preserved, only its *mechanism* changed.
+  - `NativeTick` sets a party row `Visible` (hit-testable) only while it has a subject, else
+    `HitTestInvisible` — an empty slot never eats a click. `Visible`↔`HitTestInvisible` are both in
+    Slate's visible family, so this never trips the P9 self-hide freeze; show/hide stays
+    `RenderOpacity`.
+  - `WBP_PartyFrame`'s `RootCanvas` is `SelfHitTestInvisible` (was `HitTestInvisible`) so clicks
+    reach the rows but the empty canvas area still falls through; `PartyStack` VBox is already
+    `SelfHitTestInvisible`.
+  - `ACoopPlayerController::SetCurrentTarget(AActor*)` — a direct setter (no cursor trace, the row
+    already knows the actor), same local-only / no-RPC / not-replicated contract and the same
+    `ACoopCharacter`/`ACoopMonsterCharacter` accept-filter as `SelectTargetUnderCursor`; a
+    null/rejected arg is a no-op (does **not** clear).
+- **Party stack tints the local player's own row** (warm yellow `RootBorder` brush) so a player
+  can pick themselves out. Enemy targets / other rows stay neutral dark.
+- **Aesthetic: coloured bars + text, no art.** `UProgressBar` HP bar tinted green (ally) / red
+  (enemy), an HP number, name text, role text ("TANK".."DAMAGE" or "ENEMY"), one status-text line
+  (concatenated short tag names — Downed / Fortress / Shielded / Speed / Vulnerable). "Everything
+  readable, nothing pretty" (§5).
+- **The ground ring** — `ACoopTargetRing` (`Core/CoopTargetRing.h/.cpp`), a local-only `AActor`
+  (`bReplicates = false`), spawned per-client in `BeginPlay` behind `IsLocalController()` exactly
+  like `ACoopOrbitCamera`. One engine `Plane` mesh + `M_TargetRing` (a **`MD_Surface`**, unlit,
+  translucent material — `OneMinus(Saturate(Abs(Distance(UV,(.5,.5)) - .42)/.07))` → soft ring
+  band → Opacity; one `Color` vector param → EmissiveColor). `Tick` snaps it to the current
+  target's feet, tints the MID green (`ACoopCharacter`) / red (else), hides it when there's no
+  target. This is CLAUDE.md §5's "a coloured ring on the ground ... is a spell effect" — the
+  sanctioned stand-in for a WoW selection **outline**, which §5 forbids (it needs post-processing).
+  Class is content-wired via `BP_TargetRing`'s CDO (`RingMaterial` → `M_TargetRing`); if
+  `ACoopPlayerController::TargetRingClass` is ever left unset the ring simply never spawns.
+
+**Tunables:** `TargetRingRadiusUnits` (90) + `TargetRingGroundOffsetUnits` (88) in
+`GameConstants.h` (`Category = "Targeting"`). All colours stay hardcoded-cosmetic (the
+`GetColorForPlayerId` / `GetStatusColor` precedent — §10 is about gameplay numbers).
+
+**Rebuild discipline:** the two new UCLASSes (`UCoopUnitFrameWidget` = new `UUserWidget` subclass,
+`ACoopTargetRing` = new `AActor`) were added with a **full external `Build.bat` from a closed
+editor** (Live Coding is confirmed unsafe for a brand-new `UUserWidget` subclass — see the Live
+Coding entry). All the rest is content, wired through `unreal-mcp`. Two follow-up rounds of C++
+then landed from playtest feedback: (1) the `ACoopCharacter::BeginPlay` capsule-collision fix;
+(2) the cursor-hide + party-row-click changes (`ACoopOrbitCamera` Tick + member,
+`ACoopPlayerController::SetCurrentTarget`, `UCoopUnitFrameWidget::NativeOnMouseButtonDown` override
++ `NativeTick`) — the widget gets a new virtual **override** (reuses the base's existing vtable
+slot, no layout change, but it's a `UUserWidget` subclass so treated as rebuild-only to be safe).
+**Both (1) and (2) were baked by one closed-editor `Build.bat` on 2026-09-03** (Succeeded, exit 0,
+DLL 799,744 B, UHT 0 generated files — pure C++, no reflection change; no warnings/errors). The
+`WBP_PartyFrame` `SelfHitTestInvisible` change was already saved content.
+Then (3) a **third** playtest round (2026-09-03): the cursor-hide fix above didn't restore the
+cursor's *position* on release — `ACoopOrbitCamera` gains 3 plain members (`bHasSavedCursorPos`,
+`SavedCursorX/Y`) + edge-handler logic in `Tick` (`GetMousePosition` on press, `SetMouseLocation`
+on release). **Baked by a closed-editor `Build.bat` on 2026-09-03** (Succeeded, exit 0, DLL
+799,744 B @ 14:25, UHT 0 generated files, no warnings/errors). **Nothing is owed a rebuild now.**
+
+**Verified (2026-09-03, solo agentic 5-client PIE — the second pass was against the *baked* DLL after
+the two follow-up rounds):** all assets compile/save/load; the game runs with the new widgets with
+**zero runtime errors / `Accessed None` / script warnings** across a full RoleSelect → Prep →
+HoldTheGate session; the **party frame** shows 5 rows (name / role / HP bar / "N / 100") with
+consistent replicated values across 3 clients and the local row **yellow-tinted**; HP **drops live**
+and `StatusText` shows **"DOWNED"** as monsters down players (frames read replicated state, not a
+snapshot); the **target frame stays invisible** (`RenderOpacity` 0) with no target.
+Post-bake additions: **left-click a party row → the target frame populates** with that teammate
+(name / role / green HP bar / "100 / 100"), verified on two clients via `SlateInspector`;
+**client isolation** — one client's target left another client's target frame untouched;
+**the ground ring** (`BP_TargetRing_C_0`, checked via `ObjectTools`) `bHidden` `true`→`false` on
+target set, snaps to the target pawn's location minus `TargetRingGroundOffsetUnits` (88), carries the
+`TargetRingRadiusUnits`-derived scale (90/50 = 1.8), and its `M_TargetRing` MID `Color` param goes
+`AllyRingColor` green for an `ACoopCharacter` target.
+
+**Still needs a human playtest (pure visual, or a positioned world-click the MCP tools can't
+simulate):** the cursor is visible from match start and **hides while right-click is held** (reappears
+on release); a **world-click** on a teammate/monster (`SelectTargetUnderCursor` + the capsule
+`ECC_Visibility` fix — the fix itself was trace-verified) populates the frame (ally green / "ENEMY"
+red) and click-empty-ground clears; **targeting a monster** shows red bar + red ring (the proven
+tick's `else` branch); right-click-drag camera still works with the mouse over the party frame
+(rows return `Unhandled` for RMB); RoleSelect buttons still clickable after the cursor-ownership move.
+
+## Target-required abilities need a click-selected target
+
+**Decision (2026-09-03):** three abilities are now **target-required** — they only fire when the local
+player has a click-selected target (`ACoopPlayerController::CurrentTargetActor`, from the cursor /
+party-row selection feature above). Pressing one with no target selected shows a centre-screen
+**"Please choose a target"** toast and **sends no RPC**. This is the first consumer of the
+`GetCurrentTargetActor()` seam that the "Cursor + click-to-target" entry parked as a future phase
+(*"a later phase routes it into the `Server_Activate*` RPCs as intent, server re-validates"*).
+
+**The three, and why only these three:**
+- **Execution** (Damage, `Q`) — **retrofitted** from its old "nearest `ACoopMonsterCharacter` holding
+  `Status.Vulnerable.Physical`" auto-search.
+- **Armor Break** (Tank, **`E`**, new) — applies `Status.Broken` to the targeted monster.
+- **Overload** (Damage, **`E`**, new) — the magic twin of Execution, keyed to
+  `Status.Vulnerable.Magic`.
+
+All three target an **enemy** (`ACoopMonsterCharacter`), so the server-side "valid target" check is
+uniformly `Cast<ACoopMonsterCharacter>` + range + required-tag.
+
+**Speed and Stabilize were deliberately NOT retrofitted** — explicit user call (2026-09-03: *"retrofit
+only Execution, leave Speed and Stabilize auto for now"*). They keep their "nearest ally / nearest
+Shielded Tank in range" auto-search. This keeps **Hold the Gate / the Fortress synergy flow entirely
+untouched** — that scene is verified working and Stabilize's auto-target is load-bearing for it.
+Revisit only if a later scene needs ally/Tank click-targeting.
+
+**The gate is client-first, server re-validates (CLAUDE.md §4.1):** the thin
+`BlueprintCallable` wrapper on `ACoopPlayerController` (`ActivateExecution` / `ActivateArmorBreak` /
+`ActivateOverload`, called from `BP_PlayerCharacter`'s EventGraph) reads `GetCurrentTargetActor()`.
+Null → `ShowToast(...)`, **`return` before the RPC**. Non-null → `Server_Activate*(Target)`, and the
+server casts + re-checks type / range / required tag — it never trusts the client's actor. RPC
+signatures changed: `Server_ActivateExecution()` → `Server_ActivateExecution(AActor* Target)`, plus
+new `Server_ActivateArmorBreak(AActor*)` / `Server_ActivateOverload(AActor*)`. `AActor*` replicates
+fine in an RPC (both target types are replicated actors the server already has).
+
+**`Status.Broken` has no reader yet — accepted.** Armor Break applies it (real/fake target is
+irrelevant — Armor Break reveals nothing itself). Nothing consumes it until Control's Mind Fracture +
+the False King clones (Build 2); until then it just shows on the target frame's status line
+(`BROKEN`) and expires. Same "built before its consumer" situation as Stabilize was.
+
+**`Status.Vulnerable.Magic` is dev-granted until The Heart** — via the new `ApplyTestVulnerableMagic`
+Exec command (twin of `ApplyTestVulnerable`). Both stubs are deleted together when Scene 5 lands.
+
+**The toast — `UCoopToastWidget` (`Core/CoopToastWidget.h/.cpp` + `WBP_Toast`):** a reusable
+centre-anchored transient message. Purely local cosmetic UI (§4.2) — its `NativeTick` only *reads*
+two **plain (non-`UPROPERTY`) C++ members** on the owning controller (`PendingToastText` /
+`PendingToastStartTime`, set by `ShowToast`) and fades itself. Fade is `elapsed = GetWorld()->
+GetTimeSeconds() - StartTime` (one stored stamp, **not** a `DeltaTime` accumulation — §4.4), full
+opacity for the first 60% of `ToastDurationSeconds` then linear to 0. **Never self-hides via
+`Visibility`** (the P9 action-bar freeze — a widget that leaves the "visible" family in its own tick
+freezes forever); it stays `HitTestInvisible` and only toggles `RenderOpacity`. `MessageText` is a
+`BindWidgetOptional` written from `NativeTick` — **no Designer "Bind Function" bindings** (`unreal-mcp`
+can't author them). `NativeTick` does **not** clear `MessageText` after the fade, so the text stays in
+the Slate tree at opacity 0 — a `SlateInspector.WaitFor` text-gone check can't see the fade.
+
+**Deferred, not built (need scenes that don't exist):** Link, Channel, Mind Fracture stay
+specced-not-built until The Dying Room / The False King. Carry, Chain, Taunt are out — Carry/Chain
+target *objects* (the click-select system only accepts `ACoopCharacter`/`ACoopMonsterCharacter`, and
+there are no carryable props), Taunt is undesigned.
+
+**`CoopDamageAbilities` — two explicit functions, no `TFunctionRef` helper.** `ResolveExecution` and
+`ResolveOverload` are fully spelled-out twins (each: authority/world guard → cooldown gate →
+`Set…CooldownEndServerTime` + `PlayCastMontage` on any gate-cleared cast → `Cast<ACoopMonsterCharacter>`
+→ range check → required-tag check → `RemoveStatusTag` + `ApplyDamage`), mirroring `ApplyShield` /
+`ResolveArmorBreak`'s shape. The plan sketched a shared `TFunctionRef` helper; §4.6 / §2 favour the
+explicit copy.
+
+**Rebuild discipline:** new `UCoopToastWidget` UCLASS + 2 new `UPROPERTY` cooldown fields on the
+already-loaded `ACoopCharacter` (`ArmorBreakCooldownEndServerTime` / `OverloadCooldownEndServerTime`,
+`Replicated` + `VisibleInstanceOnly` + `COND_OwnerOnly`, identical shape to the existing 5) + a
+changed `Server_ActivateExecution` signature + 4 new RPCs → **Live Coding unsafe** (see the Live
+Coding entry). All C++ landed in one batch, then one full external `Build.bat` from a closed editor
+(**Succeeded, exit 0, DLL 830,464 B @ 2026-09-03 16:00, no warnings/errors**). Content (2 `IA_*`
+assets, `IMC_Default` `E` mappings, 7 new `DA_GameConstants` fields, `WBP_Toast`, CDO wiring, 2
+`BP_PlayerCharacter` EventGraph chains, cast montages) all via `unreal-mcp` afterward.
+
+**New keys — `E` for both new abilities, role-gated.** `IMC_Default` maps `E` → `IA_ArmorBreak`
+*and* `E` → `IA_Overload`; every `Server_Activate*` is role-gated and no-ops for the wrong role, so
+one physical key means Armor Break for a Tank and Overload for Damage with no conflict — the same
+pattern that puts all 5 first abilities on `Q`.
+
+**Verified (2026-09-03, agentic 5-window PIE smoke pass):** full RoleSelect → Prep → HoldTheGate loop
+runs with **zero script errors**; `IA_Execution` pressed with no target → the "Please choose a target"
+toast renders (`SlateInspector.WaitFor` false→true); `IA_ArmorBreak` + `IA_Overload` also fire clean.
+**Still owed a hands-on pass:** targeted casts on a real monster (needs an LMB world-click the MCP
+tools can't position), the toast's opacity fade (visual), `E`-on-Tank-vs-Damage disambiguation,
+cooldown `COND_OwnerOnly` replication across the 5 client worlds, and the 2 new action-bar tiles
+(Tank slot 1 Armor Break / Damage slot 1 Overload, `E` badge + cooldown sweep). Speed/Stabilize +
+the Fortress flow to be re-confirmed unchanged.
+
+## Ability-bar UX: cooldown toast + hover tooltips
+
+**Decision (2026-09-03):** two small ability-UX additions, built per `ABILITY_UX_PROGRESS.md` (that
+file is the plan + build log; this entry is the durable summary). Both are **local, pre-RPC UI
+feedback** (CLAUDE.md §4.2) — no gameplay prediction, no replication, no new tunables (colours /
+offsets stay hardcoded-cosmetic, the `GetColorForPlayerId` precedent).
+
+**1 — "Ability not ready" toast on cooldown.** All 7 `Activate*()` wrappers on
+`ACoopPlayerController` (Shield / Speed / Dash / Stabilize / Execution / Armor Break / Overload) now
+gate client-side on the owning pawn's replicated `*CooldownEndServerTime` before sending their
+`Server_Activate*` RPC. Not ready → centre-screen `UCoopToastWidget` **"Ability not ready"** (new
+`NSLOCTEXT("CoopAbilities", "AbilityNotReady", ...)`), **no RPC**. New private helper
+`ACoopPlayerController::IsAbilityReady(float CooldownEndServerTime) const` — plain method (not a
+`UFUNCTION`), `GetWorld()->GetGameState()->GetServerWorldTimeSeconds() >= end`. A wrong-role player's
+cooldown field for an ability they don't have is always `-1`, so the toast is naturally suppressed
+for them on the 4 auto-target wrappers. **Every `Server_Activate*_Implementation` keeps its own
+authoritative cooldown re-check** in the `Resolve*`/`Apply*` namespace call — unchanged; this gate
+only saves a wasted RPC and gives feedback.
+
+**Client-side ROLE gate added to the 3 target-required wrappers** (Execution / Armor Break /
+Overload): `GetPlayerState<ACoopPlayerState>()->GetRole() != <thisAbilityRole>` → **silent `return`**
+(no toast, no RPC). This fixes a pre-existing wart: `IA_Execution` / `IA_Overload` share the `Q` / `E`
+keys with the other roles' first abilities, so a Tank/Runner/etc. pressing `Q` for *their* ability
+used to flash a spurious "Please choose a target" from the Execution chain. Order in those 3
+wrappers: **role gate → cooldown gate → target gate → RPC** (a not-ready or wrong-role ability is a
+more fundamental blocker than a missing target). The server-side role gate in each
+`_Implementation` is unchanged and stays the real guard.
+
+**2 — Hover tooltips above the action bar.** Hovering a `WBP_AbilitySlot` tile shows a LoL/WoW-style
+panel **above** the bar with the ability **name + one-sentence description** — all slots, greyed
+("coming later") ones included; a slot index past the local role's kit shows nothing.
+
+- **Pure geometry poll, NOT Slate hit-testing.** The bar and every slot stay `HitTestInvisible` (the
+  WoW-action-bar decision's core guarantee — cursor falls through to the right-click camera drag /
+  click-to-target). Each `UCoopAbilitySlotWidget::NativeTick` sets
+  `bCursorOver = MyGeometry.IsUnderLocation(UWidgetLayoutLibrary::GetMousePositionOnPlatform())`
+  (UMG, already a dep — **not** `FSlateApplication::Get().GetCursorPos()`, which needs the unlisted
+  `Slate` module; **no `Build.cs` change**). `UCoopActionBarWidget::NativeTick` reads its 3 slots
+  (`Slot0/1/2`, new `BindWidgetOptional`) and drives one shared panel. **Zero input-routing change
+  anywhere.**
+- **Tooltip content is duplicated into `CoopAbilitySlotWidget.cpp`'s kit table** — a new
+  `FText Description` on `FCoopAbilitySlotInfo`, ~11 strings lifted verbatim from
+  `CoopAbilityCardWidget.cpp`. Continues that file's existing deliberate name-duplication (CLAUDE.md
+  §4.8 / §1 "hardcoded is correct") rather than refactoring a verified widget.
+- **The panel lives in `WBP_ActionBar`** as `TooltipRoot` (a `Border`, dark `(0.05,0.05,0.07,0.92)`,
+  `HitTestInvisible`) → `TooltipBox` (`VerticalBox`) → `TooltipNameText` (bold 16) +
+  `TooltipDescText` (regular 12, wrapped at 320), anchored bottom-centre in `RootCanvas`, offset
+  `top -100`, `bAutoSize`. **Show/hide via `RenderOpacity` only** (never its own `Visibility` — the
+  P9 self-hide-freeze). All `BindWidgetOptional` + `NativeTick`, no Designer bindings.
+
+**Rebuild discipline:** Feature 1 is function bodies + one plain helper + one `NSLOCTEXT` (Live-Coding
+safe alone). Feature 2 adds **6 new `UPROPERTY(meta=(BindWidgetOptional))` members** to the
+already-loaded `UUserWidget`-derived `UCoopActionBarWidget` → **Live Coding unsafe** (see the Live
+Coding entry — new reflected members on a widget class fall on the cautious side). One full external
+`Build.bat` from a closed editor covered both (**Succeeded, exit 0, DLL 840,704 B @ 2026-09-03
+18:15, no warnings/errors**). `WBP_ActionBar`'s `TooltipRoot`/`TooltipBox`/`TooltipNameText`/
+`TooltipDescText` wired via `unreal-mcp` afterward.
+
+**`UCoopToastWidget::NativeTick` still does not clear `MessageText` after the fade** (noted in the
+target-required entry) — once any toast has shown, its text stays in the Slate tree at opacity 0, so
+`SlateInspector.WaitFor("<toast text>")` returning true only means that text was *ever* shown, not
+that it is currently visible. Verify a cooldown toast by pairing it with a cooldown-field read (a
+widened cooldown + a byte-identical `*CooldownEndServerTime` across the 2nd press = no re-cast), not
+by text presence alone.
+
+**Verified (2026-09-03, agentic 5-window PIE):**
+- Full RoleSelect → Prep → HoldTheGate loop, **zero `Error` / `Accessed None` / script warnings** for
+  any new code.
+- **Cooldown toast** (Control / Stabilize, `StabilizeCooldownSeconds` widened to 120 for the round
+  trip): cast sets `stabilizeCooldownEndServerTime`; an immediate 2nd press left it **byte-identical**
+  (`480.20114135742188` before and after) and put "Ability not ready" in the Slate tree → the client
+  gate fired, no RPC. The other 6 wrappers are the same 3-line pattern with a different getter,
+  reviewed on disk, not each PIE-tested.
+- **Client role gate:** Control / Runner / Support / Tank pressing `IA_Execution` with no target →
+  **no** "Please choose a target" (silent return); the Damage client → the toast **does** show
+  (unchanged). Confirmed across all 5 client worlds.
+- **Hover tooltip:** hovering the Tank's Shield tile → panel above the bar reads "Shield" + its
+  description; moving to the Armor Break tile → swaps to "Armor Break" + its description; hovering
+  off the bar → both texts clear. The geometry poll works under `SlateInspector.Hover` and the bar
+  never became hit-testable.
+
+**Not verified via MCP:** right-click-drag camera orbit / click-to-target *while the cursor is over
+the bar* (P4.5 — needs a real drag). Low risk: zero input-routing change, and the hover test proves
+the bar stays `HitTestInvisible` (the tooltip is a geometry poll, not a Slate hover event). Worth a
+one-minute human eyeball.
+
+**Observed, not caused by this feature (now addressed — see follow-up below):** in the first PIE run
+the prep-arena ability-card HUD (`WBP_PrepArenaHUD`) stayed on screen after HoldTheGate started.
+Nothing in the cooldown-toast / hover-tooltip work touched that widget's lifecycle.
+
+### Follow-up (2026-09-03): prep-arena ability cards deleted
+
+Once the hover tooltips (above) covered the same "what does this ability do" surface, the prep-arena
+`WBP_AbilityCard` ×4 (icon + name + one-sentence description, shown during Prep and *lingering* into
+HoldTheGate) were redundant. User directive: *"Remove the other tooltip that is showing when you
+select a class, leave only the hovers"* — and, asked how far to go, *"Strip + delete the assets."*
+
+- **Deviation from CLAUDE.md §6.3** (which mandates "3–4 ability cards with icon, name, one-sentence
+  explanation" in the prep arena) — flagged to the user before acting, same class of deliberate,
+  logged deviation as the earlier "Team Synergies panel removed" entry. `docs/abilities.md` + the
+  action-bar slot-kit table in `CoopAbilitySlotWidget.cpp` are now the sole homes of the ability
+  name/description strings.
+- **Done:** the 4 `WBP_AbilityCard` instances removed from `WBP_PrepArenaHUD` (compiled + saved —
+  tree is now `CanvasPanel_40` → the countdown `TextBlock_60` + an empty leftover `HorizontalBox_4`
+  from the old Team Synergies slot, left in place, minimal-touch). `WBP_AbilityCard.uasset` deleted.
+  `Source/Unreal_first_Game/Core/CoopAbilityCardWidget.h`/`.cpp` `git rm`'d — no code referenced
+  `UCoopAbilityCardWidget`, only comments (3 stale "like the card widget" analogy comments in
+  `CoopAbilitySlotWidget.h`/`.cpp` + `CoopStatusBarWidget.h` cleaned).
+- **One closed-editor `Build.bat`** (dropping a UCLASS from the module is not Live-Coding-safe — see
+  the "Live Coding must not be used to add a new UCLASS…" entry): Succeeded, exit 0, UHT logged
+  "source file removed", `UnrealEditor-Unreal_first_Game.dll` shrank 840,704 → **822,784 B**, zero
+  warnings/errors.
+- **Verified (2026-09-03, agentic 5-window PIE):** `WBP_PrepArenaHUD` compiles clean against the
+  rebuilt module — no missing-class / missing-parent (its parent `UCoopPrepCountdownWidget` is
+  untouched); `UCoopAbilityCardWidget` is gone from the loaded module. Full RoleSelect → Prep →
+  HoldTheGate loop with **zero script errors / Accessed-None / UMG warnings** (only the pre-existing
+  benign `FindTeleportSpot` spawn-overlap + `Not enough login credentials` PIE warnings). Prep-phase
+  HUD shows **only the countdown** (live number) alongside the party/target frames and action bar —
+  no cards; HoldTheGate shows the same minus a live number. Hover tooltips unaffected — code path
+  untouched (only comment edits), tooltip panel widgets still present and bound in the live tree; not
+  re-exercised live because the geometry poll reads the OS cursor, which the MCP synthetic hover
+  can't move (same harness gap as P4.5's camera drag).
+- **Still not done (out of scope, flagged):** `WBP_PrepArenaHUD` has no phase-gate wired, so the
+  now-bare countdown panel still lingers into HoldTheGate. `UCoopPrepCountdownWidget::
+  GetPrepArenaVisibility()` exists for a Designer "Bind" on the panel root (`unreal-mcp` can't author
+  it) or a C++ `NativeTick` self-gate. A bare "0" is far less intrusive than the old cards, so parked.

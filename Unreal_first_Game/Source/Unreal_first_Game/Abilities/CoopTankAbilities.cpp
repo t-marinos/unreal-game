@@ -1,5 +1,6 @@
 #include "Abilities/CoopTankAbilities.h"
 #include "Core/CoopCharacter.h"
+#include "Core/CoopMonsterCharacter.h"
 #include "Core/GameConstants.h"
 #include "Tags/CoopGameplayTags.h"
 #include "GameFramework/GameStateBase.h"
@@ -59,5 +60,46 @@ namespace CoopTankAbilities
 
 			Other->ApplyStatusTag(CoopGameplayTags::Status_Shielded, GameConstants->ShieldDurationSeconds);
 		}
+	}
+
+	void ResolveArmorBreak(ACoopCharacter* Tank, AActor* Target, const UGameConstants* GameConstants)
+	{
+		if (!Tank || !Tank->HasAuthority() || !GameConstants || !Tank->GetWorld())
+		{
+			return;
+		}
+
+		const AGameStateBase* GameState = Tank->GetWorld()->GetGameState();
+		const float Now = GameState ? GameState->GetServerWorldTimeSeconds() : 0.0f;
+		if (Now < Tank->GetArmorBreakCooldownEndServerTime())
+		{
+			return;
+		}
+
+		// Cooldown and cast animation both fire on any cast that clears the gate, whether or not the
+		// deeper target checks below pass -- same "I pressed my button and my character did
+		// something" feedback every ability in this project gives (DECISIONS.md "The Q ability").
+		Tank->SetArmorBreakCooldownEndServerTime(Now + GameConstants->ArmorBreakCooldownSeconds);
+		Tank->PlayCastMontage(Tank->GetArmorBreakCastMontage());
+
+		// Re-validate the intent (CLAUDE.md §4.1): the client only ever sends something it clicked,
+		// but the server owns the decision. Armor Break only affects an ACoopMonsterCharacter.
+		ACoopMonsterCharacter* MonsterTarget = Cast<ACoopMonsterCharacter>(Target);
+		if (!MonsterTarget)
+		{
+			return;
+		}
+
+		const float DistSq = FVector::DistSquared(Tank->GetActorLocation(), MonsterTarget->GetActorLocation());
+		if (DistSq > FMath::Square(GameConstants->ArmorBreakCastRangeUnits))
+		{
+			return;
+		}
+
+		// docs/abilities.md: Armor Break applies Status.Broken to whatever it hits, real or fake --
+		// it opens Mind Fracture's window, it does not reveal anything. Nothing reads Status.Broken
+		// until Control's Mind Fracture + the False King clones (Build 2); until then the tag simply
+		// shows on the target frame's status line (UCoopUnitFrameWidget) and expires.
+		MonsterTarget->ApplyStatusTag(CoopGameplayTags::Status_Broken, GameConstants->BrokenDurationSeconds);
 	}
 }

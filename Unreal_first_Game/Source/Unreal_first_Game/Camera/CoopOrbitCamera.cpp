@@ -78,7 +78,36 @@ void ACoopOrbitCamera::Tick(float DeltaTime)
 		SetActorLocation(Pawn->GetActorLocation());
 	}
 
-	if (!Controller->IsInputKeyDown(EKeys::RightMouseButton))
+	const bool bOrbiting = Controller->IsInputKeyDown(EKeys::RightMouseButton);
+
+	// Hide the cursor while the player is turning the camera, restore it -- and its screen position
+	// -- the instant they let go. Only touch bShowMouseCursor on the two edges, not every frame, and
+	// only ever from here, so it composes cleanly with ACoopPlayerController::BeginPlay's one-time
+	// "cursor on for the whole match" setup (nothing else in the project writes bShowMouseCursor).
+	if (bOrbiting != bWasOrbiting)
+	{
+		if (bOrbiting)
+		{
+			// Press edge: remember where the cursor is. GetMousePosition returns viewport-space and
+			// can fail (cursor not over the viewport) -- only trust SavedCursor* when it succeeds.
+			bHasSavedCursorPos = Controller->GetMousePosition(SavedCursorX, SavedCursorY);
+			Controller->SetShowMouseCursor(false);
+		}
+		else
+		{
+			// Release edge: put the cursor back where turning began, then reveal it. Without this
+			// warp it reappears wherever the (hidden, unlocked) cursor drifted to during the drag.
+			if (bHasSavedCursorPos)
+			{
+				Controller->SetMouseLocation(FMath::RoundToInt(SavedCursorX), FMath::RoundToInt(SavedCursorY));
+				bHasSavedCursorPos = false;
+			}
+			Controller->SetShowMouseCursor(true);
+		}
+		bWasOrbiting = bOrbiting;
+	}
+
+	if (!bOrbiting)
 	{
 		return;
 	}
