@@ -95,6 +95,64 @@ the same monster/targeting base classes.
 boss and for Build 2's general system — this is a narrow, logged, user-approved exception for
 one scene's trash monsters, not a reversal of that rule.
 
+**Follow-up (2026-09-04): the monsters now move and attack in melee.** `MONSTER_ENEMIES_PROGRESS.md`
+covers the full plan; the load-bearing decisions:
+
+- **`ACoopMonsterCharacter` was reparented `AActor` → `ACharacter`, in place** (same class/name/file,
+  so every `Cast<ACoopMonsterCharacter>` call site kept working). The custom cone `UStaticMeshComponent`
+  root is gone; the body is the stock Mannequin (`SKM_Quinn_Simple` + `ABP_Unarmed`, wired on
+  `BP_MonsterCharacter`, mirroring `BP_PlayerCharacter`) with a dark-red `"Paint Tint"` MID on every
+  mesh slot. One-liner in `BeginPlay` re-blocks `ECC_Visibility` on the inherited capsule (the
+  reparent dropped the cone's `BlockAllDynamic` mesh) so monsters stay click-targetable for Armor
+  Break / Execution / Overload — the same fix `ACoopCharacter::BeginPlay` already applies for players.
+- **New `ACoopMonsterAIController : AAIController`** (in `Core/`, not `Dev/` — this is real gameplay
+  AI now). It `Tick()`s, reads `TargetingComponent->GetCurrentTarget()`, and while the target is
+  beyond melee range does `AddMovementInput((TargetLoc - PawnLoc).GetSafeNormal2D())`. **Straight-line
+  steering only — no `MoveToActor`, no navmesh, no behaviour tree, no pathfinding.** This is a
+  deliberate, in-bounds extension of the carve-out above: that scope boundary forbade *pathfinding*,
+  not *motion*. `bOrientRotationToMovement = true`, so the monster faces where it walks. Body-blocking
+  the Tank is free (capsule vs capsule) — no code. Movement rides the default
+  `CharacterMovementComponent` replication (CLAUDE.md §4.2's one sanctioned client-prediction).
+- **The attack is melee-range-gated with a telegraphed windup.** `PerformAttackTick` (the existing
+  repeating `MonsterAttackIntervalSeconds` timer) only proceeds when the target is within
+  `MonsterMeleeRangeUnits`; on a passing tick it sets `bWindingUp`, spawns a flat red ground ring
+  (`ACoopMonsterStrikeTelegraph` — a new small replicated `AActor`, engine Plane + `M_TargetRing`
+  forced red, mirroring `ACoopTargetRing` minus its local-only cursor Tick), and arms a
+  `MonsterAttackWindupSeconds` one-shot → `PerformStrike`. `PerformStrike` re-checks range (a
+  body-block / Shield-shove / the target walking away in the window = a whiff), then `ApplyDamage`
+  + `LaunchCharacter` knockback directly away in XY. "About to hit" is transient AI state
+  (`bool bWindingUp`), **not** an `FGameplayTag` — no `docs/abilities.md` change for it.
+- **Knockback is tuned to shove a plate-holder off their plate** (user decision): the push moves the
+  character out of `ACoopPressurePlate`'s overlap band → the plate's own `OnOccupancyChanged` fires →
+  the gate closes. **No plate code changed.** This makes the monster threat attack the *objective*,
+  not just HP, and is what makes Fortress's knockback-resist matter. `MonsterKnockbackImpulse` is
+  the first real consumer of nothing new; `FortressKnockbackResistPercent` (added in an earlier
+  milestone with "no consumer yet") gets its **first consumer** here — a `Status.Fortress` target is
+  launched only `(1 - FortressKnockbackResistPercent)` as far.
+- **The `Status.Fortress` damage-negation gap was fixed as part of this.** `Stabilize` wrote
+  `Status.Fortress` and the UI showed it, but `CoopHealthComponent::ApplyDamage` only early-returned
+  on `Status.Shielded` — nothing read Fortress for defense (invisible until real monster damage
+  existed). `ApplyDamage` now early-returns on `Status.Shielded || Status.Fortress`. `Status.Shielded`
+  keeps negating damage and deliberately does **not** resist knockback — that stays the real
+  Shield → Fortress upgrade distinction (Fortress = damage negation across its radius **plus**
+  knockback resist).
+- **`CoopTankAbilities::ApplyShield` now also shoves monsters.** A parallel
+  `TActorIterator<ACoopMonsterCharacter>` loop after the existing teammate loop, same cone test,
+  `LaunchCharacter`s each matched monster away from the Tank by `ShieldShoveImpulse` (new). Shield
+  becomes a repositioning tool, not just a damage filter (`docs/scenes/HOLD_THE_GATE.md`'s "knock
+  enemies away"). Fortress adds no shove of its own — its upgrade value stays multi-teammate damage
+  coverage + the knockback resist.
+- **Two closed-editor `Build.bat` rebuilds** (one per phase — a base-class change + new UCLASSes are
+  Live-Coding-unsafe per the entry below), both `exit 0`, no warnings. Verification: Phase A + the
+  telegraph/strike/knockback/Downed-retarget path are confirmed in solo dev-mode PIE; the Fortress
+  negation, Shield-shove, and plate-dislodge checks need a real 5-player playtest (dev dummies idle
+  on a raised platform out of monster melee reach) — tracked in `MONSTER_ENEMIES_PROGRESS.md` B9.
+
+**Still in bounds:** no generic ability/effect system (CLAUDE.md §4.6) — the windup/strike/knockback
+is hand-written on `ACoopMonsterCharacter`, the Fortress read is one `||`, the Shield-shove is one
+loop. No navmesh / behaviour tree / pathfinding / adaptive difficulty anywhere. Still scoped to
+Hold the Gate's trash monsters; Build 2 still owns the general framework and the boss's sequencer.
+
 ## Role assignment is player-chosen, not random
 
 **Decision:** CLAUDE.md §6.1 and §6.3's original wording ("Roles are assigned **randomly** at

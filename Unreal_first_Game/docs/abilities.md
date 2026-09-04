@@ -23,8 +23,8 @@ it back to a design discussion first.
 | Tag | Written by | Read by | Notes |
 |---|---|---|---|
 | `Status.SpeedBuff` | Support `Speed` | Runner `Dash` | Enables Thousand Dashes resolution |
-| `Status.Shielded` | Tank `Shield` | Control `Stabilize` | Baseline block state |
-| `Status.Fortress` | Control `Stabilize` (upgrade output) | Fortress protection logic | Multi-teammate, knockback-resistant |
+| `Status.Shielded` | Tank `Shield` | Control `Stabilize`; `CoopHealthComponent::ApplyDamage` (negates the hit) | Baseline block state. Negates **damage** only — does **not** resist knockback (a Shielded plate-holder is still shoved off their plate by a monster strike). |
+| `Status.Fortress` | Control `Stabilize` (upgrade output) | `CoopHealthComponent::ApplyDamage` (negates the hit); `ACoopMonsterCharacter::PerformStrike` (scales knockback by `1 - FortressKnockbackResistPercent`) | Multi-teammate (covers everyone within `FortressCoverageRadiusUnits` of the Tank, not just Tank's cone) **and** knockback-resistant. First actually read for defence in `MONSTER_ENEMIES_PROGRESS.md` Phase B — before monster strikes existed it was written & shown but never consumed. |
 | `Status.Broken` | Tank `Armor Break` | Control `Mind Fracture` | Short window, target-specific |
 | `Status.Linked` | Support `Link` | Control `Channel` | Two-actor relationship (Support ↔ target) |
 | `Status.TeamSpirit` | Control `Channel` (upgrade output) | Life Network heal/buff/damage-share routing | Group-wide, routes through the link chain |
@@ -39,11 +39,12 @@ it back to a design discussion first.
 **Fantasy:** "For the next 15 seconds, everyone trusts me."
 
 ### Shield — *Fortress input*
-- **Effect:** Raises a directional damage-blocking volume in front of Tank, absorbing/negating incoming damage from that facing.
-- **Writes:** `Status.Shielded` (self, or the actor(s) currently standing behind it — exact coverage shape is a Hold the Gate implementation detail, see `docs/scenes/HOLD_THE_GATE.md`).
+- **Effect:** Raises a directional damage-blocking volume in front of Tank, negating incoming damage for its holder(s). **Also shoves every `ACoopMonsterCharacter` in its forward cone** (`ShieldCoverageAngleDegrees` / `ShieldCoverageRadiusUnits`) directly away from Tank by `ShieldShoveImpulse` — a one-time `LaunchCharacter` on the raise, making Shield a repositioning tool, not just a damage filter (`docs/scenes/HOLD_THE_GATE.md`'s "knock enemies away").
+- **Writes:** `Status.Shielded` (self, plus the teammate actor(s) within the cone — exact coverage shape is a Hold the Gate implementation detail, see `docs/scenes/HOLD_THE_GATE.md`). `Status.Shielded` makes `CoopHealthComponent::ApplyDamage` negate all incoming damage for its holder, but does **not** resist knockback.
 - **Reads:** none.
 - **Taught in:** Hold the Gate (Scene 2).
-- **Server authority:** the blocking volume's damage negation resolves server-side only; the visual raise/lower is the only client-local cosmetic.
+- **Server authority:** the damage negation, the coverage cone, and the monster-shove all resolve server-side only; the visual raise/lower is the only client-local cosmetic.
+- **Prototype status (2026-09-03):** *castable now — Tank, `Q` key (see `DECISIONS.md` "The Q ability"). Applies `Status.Shielded` for `ShieldDurationSeconds`.*
 
 ### Armor Break — *Mind Fracture input*
 - **Effect:** Tank targets one enemy actor (used against False King clones to "test" them).
@@ -112,11 +113,12 @@ it back to a design discussion first.
 **Fantasy:** "I see what the others cannot. Listen to me."
 
 ### Stabilize — *Fortress output*
-- **Effect:** Cast on a Tank actor currently holding `Status.Shielded`. Upgrades that shield to **Fortress**: multi-teammate coverage (not just Tank's own facing) and knockback resistance.
-- **Reads:** `Status.Shielded`.
-- **Writes:** `Status.Fortress` (replaces/upgrades `Status.Shielded` for the covered duration).
+- **Effect:** Cast by Control near a Tank actor currently holding `Status.Shielded`. Upgrades that shield to **Fortress** on the Tank and every teammate within `FortressCoverageRadiusUnits` of them. Fortress: (a) `CoopHealthComponent::ApplyDamage` negates all incoming damage for anyone holding it — same as `Status.Shielded`, but across the radius instead of just Tank's own cone; (b) a monster strike's knockback on a Fortress'd target is scaled by `(1 - FortressKnockbackResistPercent)`, so a Fortress'd plate-holder stays on their plate through a hit that would dislodge a merely-Shielded one.
+- **Reads:** `Status.Shielded` (on the nearest Tank).
+- **Writes:** `Status.Fortress` (replaces `Status.Shielded` on the Tank + covered teammates for `FortressDurationSeconds`).
 - **Taught in:** Hold the Gate (Scene 2).
-- **Server authority:** the upgrade check (does the target currently hold `Status.Shielded`?) and the resulting protection radius/knockback-resist are server-only.
+- **Server authority:** the upgrade check (does the nearest Tank hold `Status.Shielded`?), the radius loop, the `ApplyDamage` negation, and the knockback-resist read (in `ACoopMonsterCharacter::PerformStrike`) are all server-only.
+- **Prototype status (2026-09-04):** *castable now — Control, `Q` key. The `ApplyDamage` negation and the knockback-resist are both live as of `MONSTER_ENEMIES_PROGRESS.md` Phase B (before that, `Status.Fortress` was written & shown on the badge but nothing read it). Verified in solo dev-mode PIE only for the damage/knockback path in general; the Fortress-specific negation + resist still need a real Tank+Control playtest (tracked in that doc's B9.4).*
 
 ### Mind Fracture — *Mind Fracture output*
 - **Effect:** Cast on a target currently holding `Status.Broken`. Server checks whether that target is the True King's real actor; if so, fires a reveal cue (see `docs/scenes/THE_FALSE_KING.md` for the proposed non-perspective-dependent cue design).

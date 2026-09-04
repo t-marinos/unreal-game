@@ -56,14 +56,17 @@ void UCoopHealthComponent::ApplyDamage(float DamageAmount)
 	}
 
 	// Build 1, M7: Tank's Shield negates all incoming damage while Status.Shielded is active.
-	// Simplification, not the full spec -- docs/abilities.md describes Shield as blocking damage
-	// "from that facing" only, but ApplyDamage has no damage-source location to check a facing
-	// against, and nothing in the codebase deals real damage yet (M11's monsters are the first).
-	// Negating unconditionally is the simple version CLAUDE.md §1 asks for; a directional check is
-	// a contained follow-up once there's an actual attack to test it against.
+	// MONSTER_ENEMIES_PROGRESS.md Phase B: Status.Fortress -- the Stabilize upgrade of Shield --
+	// negates it the same way. Fortress was written by Stabilize and shown on the status badge, but
+	// until monster strikes existed nothing actually READ it for defence (the gap this pass closes).
+	// The Shield -> Fortress distinction lives elsewhere: Fortress covers a radius of teammates (not
+	// just Tank's cone) AND resists knockback (ACoopMonsterCharacter::PerformStrike); Status.Shielded
+	// does neither. Simplification unchanged from M7 -- negates unconditionally, no damage-source
+	// facing check (ApplyDamage still has no source location to check against).
 	if (const ACoopCharacter* OwningCharacter = Cast<ACoopCharacter>(GetOwner()))
 	{
-		if (OwningCharacter->HasStatusTag(CoopGameplayTags::Status_Shielded))
+		if (OwningCharacter->HasStatusTag(CoopGameplayTags::Status_Shielded)
+			|| OwningCharacter->HasStatusTag(CoopGameplayTags::Status_Fortress))
 		{
 			return;
 		}

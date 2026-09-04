@@ -102,6 +102,14 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Abilities")
 	float ShieldCoverageRadiusUnits = 300.0f;
 
+	// MONSTER_ENEMIES_PROGRESS.md Phase B: Shield-shove. Every ACoopMonsterCharacter caught in
+	// Shield's forward cone (the same angle/radius test as the teammate-coverage loop) is
+	// LaunchCharacter'd straight back from Tank by this impulse -- docs/scenes/HOLD_THE_GATE.md's
+	// "knock enemies away", making Shield a repositioning tool, not just a damage filter. Fortress
+	// deliberately adds no shove of its own.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Abilities")
+	float ShieldShoveImpulse = 900.0f;
+
 	// Build 1, M8: Control Stabilize (CoopControlAbilities::ResolveStabilize). Cooldown, and how
 	// far away a Tank can be and still be found by the implicit nearest-Tank targeting search.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Abilities")
@@ -113,9 +121,9 @@ public:
 	// How long Status.Fortress persists once Stabilize upgrades a Shielded Tank, the radius around
 	// that Tank within which teammates also receive Fortress (docs/abilities.md: "multi-teammate
 	// coverage, not just Tank's own facing"), and the fraction of knockback Fortress resists.
-	// FortressKnockbackResistPercent has no consumer yet -- no ability applies knockback until
-	// Hold the Gate's monsters exist (M11) -- stored now so the constant already exists when that
-	// lands, per CLAUDE.md §1's "simple now, note the tradeoff" allowance.
+	// FortressKnockbackResistPercent's first consumer is ACoopMonsterCharacter::PerformStrike
+	// (MONSTER_ENEMIES_PROGRESS.md Phase B) -- a Fortress'd target is launched only
+	// (1 - FortressKnockbackResistPercent) as far by a monster strike.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Abilities")
 	float FortressDurationSeconds = 8.0f;
 
@@ -280,6 +288,37 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Monster")
 	float MonsterAttackIntervalSeconds = 2.0f;
+
+	// MONSTER_ENEMIES_PROGRESS.md Phase A: monsters now walk toward their fixate target
+	// (ACoopMonsterAIController straight-line steering) instead of harassing from where they
+	// spawned. Walk speed set on ACharacter::GetCharacterMovement()->MaxWalkSpeed in
+	// InitializeMonster -- kept a bit below player run speed (~500) so Tank/Runner can outpace them.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Monster")
+	float MonsterMoveSpeed = 350.0f;
+
+	// How close a monster must be to its target before PerformAttackTick will land a hit -- and how
+	// far out ACoopMonsterAIController stops feeding movement input. Roughly capsule-to-capsule plus
+	// a little reach. Read via ACoopMonsterCharacter::GetMeleeRangeUnits().
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Monster")
+	float MonsterMeleeRangeUnits = 160.0f;
+
+	// MONSTER_ENEMIES_PROGRESS.md Phase B: the telegraphed lead time before a monster's melee strike
+	// lands. A flat red ground ring (ACoopMonsterStrikeTelegraph) shows at the target's feet for
+	// this long, then ACoopMonsterCharacter::PerformStrike resolves -- re-checking range, so moving
+	// the monster out of melee during the window (body-block, Shield-shove, or just walking away)
+	// makes the strike whiff.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Monster")
+	float MonsterAttackWindupSeconds = 1.0f;
+
+	// LaunchCharacter impulse a landed monster strike applies to the player target, directly away
+	// from the monster in the XY plane. Tuned (B9) strong enough to shove a plate-holder off their
+	// plate -- the push moves them out of ACoopPressurePlate's thin overlap band, so the plate's own
+	// OnOccupancyChanged fires and the gate closes, with no plate code changes. This makes the
+	// monster threat attack the objective, not just HP. Status.Fortress resists it by
+	// FortressKnockbackResistPercent (first consumer of that constant); Status.Shielded negates the
+	// damage but deliberately does NOT resist knockback.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Monster")
+	float MonsterKnockbackImpulse = 650.0f;
 
 	// Cursor-targeting feature (cursor_progress.md): the flat ground ring under the click-selected
 	// target (ACoopTargetRing / M_TargetRing). Ring radius in world units (the plane mesh is scaled

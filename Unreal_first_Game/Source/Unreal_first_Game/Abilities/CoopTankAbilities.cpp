@@ -60,6 +60,45 @@ namespace CoopTankAbilities
 
 			Other->ApplyStatusTag(CoopGameplayTags::Status_Shielded, GameConstants->ShieldDurationSeconds);
 		}
+
+		// MONSTER_ENEMIES_PROGRESS.md Phase B -- Shield-shove. Every ACoopMonsterCharacter caught in
+		// the same forward cone (docs/scenes/HOLD_THE_GATE.md's "knock enemies away") is launched
+		// straight back from Tank. Server-only (this whole function asserts HasAuthority above); rides
+		// the CLAUDE.md §4.2 movement-replication exception, same as Dash and the monster's own strike
+		// knockback. Makes Shield a repositioning tool, not just a damage filter -- Fortress
+		// deliberately adds no shove of its own, keeping this to one loop in one function.
+		for (TActorIterator<ACoopMonsterCharacter> It(Tank->GetWorld()); It; ++It)
+		{
+			ACoopMonsterCharacter* Monster = *It;
+			if (!Monster)
+			{
+				continue;
+			}
+
+			const FVector ToMonster = Monster->GetActorLocation() - TankLocation;
+			const float Distance = ToMonster.Size();
+			if (Distance > GameConstants->ShieldCoverageRadiusUnits)
+			{
+				continue;
+			}
+
+			// Same degenerate-direction guard as the teammate loop above.
+			if (Distance > KINDA_SMALL_NUMBER)
+			{
+				const float DotToMonster = FVector::DotProduct(TankForward, ToMonster.GetSafeNormal());
+				if (DotToMonster < CoverageAngleCos)
+				{
+					continue;
+				}
+			}
+
+			FVector ShoveDir = ToMonster.GetSafeNormal2D();
+			if (ShoveDir.IsNearlyZero())
+			{
+				ShoveDir = TankForward.GetSafeNormal2D();
+			}
+			Monster->LaunchCharacter(ShoveDir * GameConstants->ShieldShoveImpulse, true, false);
+		}
 	}
 
 	void ResolveArmorBreak(ACoopCharacter* Tank, AActor* Target, const UGameConstants* GameConstants)
